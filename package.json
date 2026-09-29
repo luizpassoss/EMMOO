@@ -1,0 +1,15 @@
+{
+  "name": "emmoo-gestao",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Atalhos para instalar e rodar a API e o front do EMMOO a partir da raiz do projeto",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "setup": "npm install --prefix api && npm run prisma:generate --prefix api && npm install --prefix web",
+    "dev": "node scripts/dev.mjs",
+    "test": "npm test --prefix api && npm test --prefix web"
+  }
+}

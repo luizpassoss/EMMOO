@@ -1,0 +1,38 @@
+{
+  "name": "emmoo-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API REST do Sistema de Gestão de Agenda, Mensalidades e Presença da Escola de Música EMMOO",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test",
+    "test:unit": "node --test \"tests/unit/**/*.test.js\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=75 --test-coverage-functions=75 --test-coverage-branches=70 --test-coverage-exclude=tests/** --test-coverage-exclude=src/server.js --test-coverage-exclude=src/infra/prisma/**",
+    "lint": "eslint .",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "db:push": "prisma db push",
+    "db:seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.0.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "prisma": "^6.0.0"
+  }
+}

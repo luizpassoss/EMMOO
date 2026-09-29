@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  api:
+    name: API — lint, testes e cobertura (meta 75%)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar dependências
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Validar schema do Prisma
+        run: npx prisma validate
+        env:
+          DATABASE_URL: mysql://ci:ci@localhost:3306/ci
+      - name: Lint
+        run: npm run lint
+      - name: Testes com cobertura
+        run: npm run test:coverage
+
+  web:
+    name: Web — testes, cobertura (meta 25%) e build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar dependências
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Testes com cobertura
+        run: npm run test:coverage
+      - name: Build de produção
+        run: npm run build
+
+  docker:
+    name: Build das imagens Docker
+    runs-on: ubuntu-latest
+    needs: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Imagem da API
+        run: docker build -t emmoo-api ./api
+      - name: Imagem do Web
+        run: docker build -t emmoo-web ./web

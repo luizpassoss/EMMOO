@@ -1,0 +1,180 @@
+// Modelo de dados do Sistema EMMOO — espelha o DER da RFC (Figura 6).
+// Tabelas em snake_case (@@map) e campos em camelCase no código (@map).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Papel {
+  coordenacao
+  professor
+  responsavel
+}
+
+enum TipoPlano {
+  particular
+  grupo
+}
+
+enum StatusAluno {
+  ativo
+  inativo
+}
+
+enum StatusAula {
+  agendada
+  realizada
+  falta
+  cancelada
+}
+
+enum TipoSolicitacao {
+  falta
+  reposicao
+}
+
+enum StatusSolicitacao {
+  pendente
+  aprovada
+  recusada
+}
+
+enum StatusMensalidade {
+  pendente
+  paga
+  atrasada
+}
+
+model Usuario {
+  id           Int      @id @default(autoincrement())
+  nome         String   @db.VarChar(120)
+  email        String   @unique @db.VarChar(160)
+  senhaHash    String   @map("senha_hash") @db.VarChar(100)
+  papel        Papel
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  alunosResponsavel   Aluno[]
+  horariosDisponiveis HorarioDisponivel[]
+  aulas               Aula[]
+
+  @@map("usuario")
+}
+
+model Plano {
+  id           Int       @id @default(autoincrement())
+  nome         String    @db.VarChar(80)
+  tipo         TipoPlano
+  valor        Decimal   @db.Decimal(10, 2)
+  freqSemanal  Int       @map("freq_semanal")
+  duracaoMin   Int       @default(45) @map("duracao_min")
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+  atualizadoEm DateTime  @updatedAt @map("atualizado_em")
+
+  alunos Aluno[]
+
+  @@map("plano")
+}
+
+model Aluno {
+  id            Int         @id @default(autoincrement())
+  nome          String      @db.VarChar(120)
+  contato       String      @db.VarChar(120)
+  instrumento   String      @db.VarChar(60)
+  status        StatusAluno @default(ativo)
+  planoId       Int         @map("plano_id")
+  usuarioRespId Int?        @map("usuario_resp_id")
+  criadoEm      DateTime    @default(now()) @map("criado_em")
+  atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
+
+  plano        Plano         @relation(fields: [planoId], references: [id])
+  responsavel  Usuario?      @relation(fields: [usuarioRespId], references: [id])
+  aulas        Aula[]
+  solicitacoes Solicitacao[]
+  mensalidades Mensalidade[]
+
+  @@map("aluno")
+}
+
+model HorarioDisponivel {
+  id          Int     @id @default(autoincrement())
+  professorId Int     @map("professor_id")
+  diaSemana   Int     @map("dia_semana") // 0 = domingo ... 6 = sábado
+  horaInicio  String  @map("hora_inicio") @db.VarChar(5) // formato "HH:MM"
+  duracaoMin  Int     @default(45) @map("duracao_min")
+  disponivel  Boolean @default(true)
+
+  professor Usuario @relation(fields: [professorId], references: [id])
+
+  @@unique([professorId, diaSemana, horaInicio])
+  @@map("horario_disponivel")
+}
+
+model Aula {
+  id          Int        @id @default(autoincrement())
+  alunoId     Int        @map("aluno_id")
+  professorId Int        @map("professor_id")
+  data        DateTime   @db.Date
+  hora        String     @db.VarChar(5) // formato "HH:MM"
+  duracaoMin  Int        @default(45) @map("duracao_min")
+  status      StatusAula @default(agendada)
+  criadoEm    DateTime   @default(now()) @map("criado_em")
+
+  aluno        Aluno         @relation(fields: [alunoId], references: [id])
+  professor    Usuario       @relation(fields: [professorId], references: [id])
+  diario       DiarioAula?
+  solicitacoes Solicitacao[]
+
+  // RN09/RN10 — o conflito é verificado no serviço por sobreposição de intervalos (não só hora igual).
+  // Uma restrição única aqui impediria reagendar o horário de uma aula cancelada, que fica no histórico.
+  @@index([professorId, data])
+  @@index([alunoId, data])
+  @@map("aula")
+}
+
+model DiarioAula {
+  id                 Int     @id @default(autoincrement())
+  aulaId             Int     @unique @map("aula_id")
+  conteudoMinistrado String  @map("conteudo_ministrado") @db.Text
+  planoProxima       String? @map("plano_proxima") @db.Text
+
+  aula Aula @relation(fields: [aulaId], references: [id])
+
+  @@map("diario_aula")
+}
+
+model Solicitacao {
+  id              Int               @id @default(autoincrement())
+  alunoId         Int               @map("aluno_id")
+  aulaId          Int?              @map("aula_id")
+  tipo            TipoSolicitacao
+  dataSolicitacao DateTime          @default(now()) @map("data_solicitacao")
+  status          StatusSolicitacao @default(pendente)
+  novaData        DateTime?         @map("nova_data")
+
+  aluno Aluno @relation(fields: [alunoId], references: [id])
+  aula  Aula? @relation(fields: [aulaId], references: [id])
+
+  @@map("solicitacao")
+}
+
+model Mensalidade {
+  id             Int               @id @default(autoincrement())
+  alunoId        Int               @map("aluno_id")
+  mesReferencia  String            @map("mes_referencia") @db.VarChar(7) // formato "AAAA-MM"
+  valor          Decimal           @db.Decimal(10, 2)
+  vencimento     DateTime          @db.Date
+  status         StatusMensalidade @default(pendente)
+  dataPagamento  DateTime?         @map("data_pagamento") @db.Date
+  formaPagamento String?           @map("forma_pagamento") @db.VarChar(30)
+
+  aluno Aluno @relation(fields: [alunoId], references: [id])
+
+  @@unique([alunoId, mesReferencia])
+  @@map("mensalidade")
+}

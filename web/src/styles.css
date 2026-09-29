@@ -1,0 +1,223 @@
+/* Identidade visual minimalista em tons de cinza (mesma dos mockups da RFC). Mobile-first. */
+:root {
+  --tinta: #1a1a1a;
+  --texto: #3a3a3a;
+  --suave: #767676;
+  --linha: #e4e4e4;
+  --fundo: #f6f6f6;
+  --cartao: #ffffff;
+  --escuro: #2b2b2b;
+  --raio: 14px;
+  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+  color: var(--texto);
+  background: var(--fundo);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+h1, h2 { color: var(--tinta); margin: 0 0 8px; }
+h2 { font-size: 1.05rem; }
+
+.titulo { font-size: 1.5rem; }
+.texto-suave { color: var(--suave); margin: 0 0 16px; }
+
+/* ---------- Estrutura (celular: menu na base; desktop: menu lateral) ---------- */
+.app { min-height: 100vh; padding-bottom: 72px; }
+.sidebar {
+  position: fixed; inset: auto 0 0 0; z-index: 10;
+  background: var(--cartao); border-top: 1px solid var(--linha);
+}
+.sidebar .marca { display: none; }
+.menu { display: flex; justify-content: space-around; }
+.menu-item {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 12px; font-size: 0.75rem; color: var(--suave); text-decoration: none;
+}
+.menu-item.ativo { color: var(--tinta); font-weight: 600; }
+/* Largura fixa: cada símbolo tem uma largura, e sem isso os rótulos do menu ficariam desalinhados. */
+.menu-icone { font-size: 1.2rem; width: 1.5rem; text-align: center; flex: none; }
+
+.topo {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; background: var(--cartao); border-bottom: 1px solid var(--linha);
+}
+.usuario { display: flex; align-items: center; gap: 10px; }
+.usuario small { display: block; color: var(--suave); }
+.pagina { padding: 20px 16px; max-width: 980px; }
+
+@media (min-width: 768px) {
+  .app { display: flex; padding-bottom: 0; }
+  .sidebar {
+    position: sticky; top: 0; inset: auto; width: 220px; height: 100vh;
+    border-top: 0; border-right: 1px solid var(--linha); padding: 20px 12px;
+  }
+  .sidebar .marca { display: flex; margin: 0 8px 28px; }
+  .menu { flex-direction: column; gap: 4px; }
+  .menu-item { flex-direction: row; gap: 12px; font-size: 0.95rem; border-radius: 10px; padding: 10px 12px; }
+  .menu-item.ativo { background: #efefef; }
+  .conteudo { flex: 1; }
+  .pagina { padding: 28px 32px; }
+}
+
+/* ---------- Componentes ---------- */
+.marca { display: flex; align-items: center; gap: 8px; }
+.marca-icone { font-size: 1.4rem; color: var(--tinta); }
+.marca h1 { margin: 0; font-size: 1.8rem; }
+
+.avatar {
+  display: inline-grid; place-items: center; flex: none;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: #f0f0f0; border: 1px solid var(--linha);
+  color: var(--suave); font-weight: 700; font-size: 0.85rem;
+}
+
+.card {
+  background: var(--cartao); border: 1px solid var(--linha); border-radius: var(--raio);
+  padding: 18px; margin-bottom: 18px; box-shadow: 0 2px 0 #ececec;
+}
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.card-indicador {
+  background: #efefef; border-radius: var(--raio); padding: 16px;
+  display: flex; flex-direction: column; justify-content: space-between; gap: 6px; /* números alinhados pela base */
+}
+.card-indicador span { color: var(--suave); font-size: 0.9rem; }
+.card-indicador strong { color: var(--tinta); font-size: 1.8rem; }
+
+.lista { list-style: none; margin: 0; padding: 0; }
+.lista-item {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 0; border-bottom: 1px solid var(--linha);
+}
+.lista-item:last-child { border-bottom: 0; }
+.lista-item > div, .lista-texto { flex: 1; min-width: 160px; }
+.lista-item small { display: block; color: var(--suave); }
+.valor { font-weight: 700; color: var(--tinta); }
+
+.pill { border-radius: 999px; padding: 3px 12px; font-size: 0.75rem; font-weight: 700; }
+.pill-ativo { background: #ececec; color: var(--tinta); }
+.pill-inativo { background: var(--escuro); color: #fff; }
+
+/* ---------- Formulários ---------- */
+.formulario { display: flex; flex-direction: column; gap: 12px; }
+.grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.campo { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; color: var(--texto); }
+.campo input, .campo select {
+  font: inherit; padding: 10px 12px; border-radius: 10px; height: 44px; /* select, date e number com a mesma altura */
+  border: 1px solid #d6d6d6; background: #fafafa; color: var(--tinta);
+}
+.campo input:focus, .campo select:focus { outline: 2px solid var(--tinta); outline-offset: 1px; }
+.campo [aria-invalid='true'] { border-color: #b00020; }
+.erro-campo { color: #b00020; }
+
+.botao {
+  font: inherit; font-weight: 700; cursor: pointer; border-radius: 999px;
+  padding: 10px 20px; border: 1px solid transparent;
+}
+.botao:disabled { opacity: 0.6; cursor: wait; }
+.botao-primario { background: var(--escuro); color: #fff; }
+.botao-secundario { background: #fff; color: var(--texto); border-color: #d6d6d6; }
+.botao-link { background: none; border: 0; padding: 4px 0; color: var(--suave); text-decoration: underline; }
+
+.alerta {
+  background: #f0f0f0; border: 1px solid #cfcfcf; border-left: 4px solid var(--escuro);
+  border-radius: 10px; padding: 10px 12px; color: var(--tinta);
+}
+
+/* ---------- Login ---------- */
+.login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.login-card {
+  width: 100%; max-width: 380px; background: var(--cartao);
+  border: 1px solid var(--linha); border-radius: 18px; padding: 32px 28px;
+  display: flex; flex-direction: column; gap: 14px; box-shadow: 0 3px 0 #ececec;
+}
+.login-card .marca, .login-card .texto-suave { justify-content: center; text-align: center; margin: 0; }
+
+/* ---------- Feedback, filtros e ações ---------- */
+.aviso {
+  background: #f7f7f7; border: 1px solid var(--linha); border-left: 4px solid var(--suave);
+  border-radius: 10px; padding: 10px 12px; color: var(--tinta);
+}
+.aviso::before { content: '✓ '; font-weight: 700; }
+
+.cabecalho-pagina {
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px;
+}
+.card-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.card-cabecalho h2 { margin: 0; }
+.filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 14px; }
+.filtros .texto-suave { margin: 0; }
+.campo-inline { flex-direction: row; align-items: center; gap: 8px; }
+.busca {
+  flex: 1; min-width: 200px; font: inherit; padding: 9px 14px; border-radius: 999px;
+  border: 1px solid #d6d6d6; background: #fafafa; color: var(--tinta);
+}
+
+.segmentos { display: inline-flex; border: 1px solid #d6d6d6; border-radius: 999px; padding: 3px; background: #fafafa; }
+.segmento {
+  font: inherit; font-size: 0.9rem; border: 0; background: transparent; color: var(--texto);
+  border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+.segmento small { opacity: 0.7; }
+.segmento.ativo { background: var(--escuro); color: #fff; }
+
+.lista-item > .acoes { display: flex; gap: 14px; flex: none; min-width: 0; }
+.botoes { display: flex; flex-wrap: wrap; gap: 10px; }
+.botao-icone { width: 38px; height: 38px; padding: 0; font-size: 1.3rem; line-height: 1; }
+.formulario-secao { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--linha); }
+
+.botao:focus-visible, .segmento:focus-visible, .chip-botao:focus-visible, .chip-remover:focus-visible, .busca:focus-visible {
+  outline: 2px solid var(--tinta); outline-offset: 2px;
+}
+
+/* ---------- Chips (horários e vagas) ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 0.85rem; font-weight: 600;
+  padding: 4px 10px; border-radius: 999px; border: 1px solid var(--linha); background: #f4f4f4; color: var(--tinta);
+}
+.chip small { color: var(--suave); font-weight: 400; }
+.chip-remover { border: 0; background: none; color: var(--suave); cursor: pointer; font-size: 1rem; padding: 0 2px; line-height: 1; }
+.chip-remover:hover { color: var(--tinta); }
+.chip-botao { cursor: pointer; }
+.chip-botao.ativo { background: var(--escuro); border-color: var(--escuro); color: #fff; }
+.horarios-dia { min-width: 72px; }
+.vagas {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
+  border: 1px dashed #d0d0d0; border-radius: 10px; background: #fafafa;
+}
+.vagas .texto-suave { margin: 0; }
+
+/* ---------- Agenda semanal ---------- */
+.navegacao-semana { display: flex; align-items: center; gap: 8px; }
+.navegacao-semana strong { min-width: 150px; text-align: center; color: var(--tinta); }
+.semana { display: grid; gap: 12px; margin-bottom: 18px; transition: opacity 0.15s; }
+.semana[aria-busy='true'] { opacity: 0.6; }
+.dia { margin: 0; padding: 14px 16px; }
+.dia-hoje { border-color: var(--tinta); }
+.dia-titulo { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
+.dia-vazio { margin: 0; font-size: 0.9rem; }
+.dia-sem-aulas { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dia-sem-aulas .dia-titulo { margin: 0; }
+.aula-hora { display: flex; flex-direction: column; min-width: 48px; font-weight: 700; color: var(--tinta); }
+.aula-hora small { font-weight: 400; }
+.aula-cancelada .lista-texto strong { text-decoration: line-through; color: var(--suave); }
+
+.pill-agendada { background: #ececec; color: var(--tinta); }
+.pill-realizada { background: var(--escuro); color: #fff; }
+.pill-falta { background: #fff; color: var(--tinta); border: 1px solid var(--tinta); }
+.pill-cancelada { background: #fff; color: var(--suave); border: 1px dashed #bdbdbd; }
+.pill-hoje { background: var(--escuro); color: #fff; font-size: 0.7rem; padding: 2px 8px; }
+
+@media (max-width: 767px) {
+  .navegacao-semana { width: 100%; justify-content: space-between; }
+  /* Itens com ações viram grade: as ações descem para uma segunda linha alinhada ao texto, não à margem. */
+  .lista-item:has(> .acoes) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 12px; row-gap: 4px; }
+  .lista-item:has(> .acoes) > .lista-texto { min-width: 0; }
+  .lista-item > .acoes { grid-column: 2 / -1; }
+  .card-indicador { padding: 12px; }
+  .card-indicador strong { font-size: 1.5rem; }
+}
+@media (min-width: 768px) {
+  .formulario > .botao { align-self: flex-start; } /* no celular o botão ocupa a largura toda */
+  .cards { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+}
