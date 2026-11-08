@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import Campo from '../components/Campo.jsx';
+import { Aviso, CabecalhoPagina, Carregando, Painel, useAviso, useConfirmacao, usePainel, Vazio } from '../components/Estrutura.jsx';
+import Icone from '../components/Icone.jsx';
 import { mapearErros } from '../utils/erros.js';
-import { iniciais, plural } from '../utils/format.js';
+import { foiAlterado, formatarContato, formatarMoeda, formatarMoedaCurta, iniciais, plural } from '../utils/format.js';
 
 const FORM_VAZIO = { nome: '', contato: '', instrumento: '', planoId: '', usuarioRespId: '' };
 const FILTROS = [
@@ -12,11 +15,21 @@ const FILTROS = [
   { valor: '', rotulo: 'Todos' },
 ];
 
+function dadosDoFormulario(aluno) {
+  return {
+    nome: aluno.nome,
+    contato: aluno.contato,
+    instrumento: aluno.instrumento,
+    planoId: String(aluno.planoId),
+    usuarioRespId: aluno.usuarioRespId ? String(aluno.usuarioRespId) : '',
+  };
+}
+
 /** Ignora acentos e maiúsculas na busca ("violao" encontra "Violão"). */
 const normalizar = (texto) =>
   String(texto ?? '')
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 
 export default function AlunosPage() {
@@ -27,14 +40,19 @@ export default function AlunosPage() {
   const [responsaveis, setResponsaveis] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
-  const [aviso, setAviso] = useState('');
+  const [aviso, setAviso] = useAviso();
+  const [confirmar, confirmacao] = useConfirmacao();
   const [filtroStatus, setFiltroStatus] = useState('ativo');
   const [busca, setBusca] = useState('');
+  // Painel na URL: /alunos?aluno=novo (cadastro) ou /alunos?aluno=3 (edição) — o "voltar" fecha o painel.
+  const [painel, abrirPainel, fecharPainel] = usePainel('aluno');
+  const painelAberto = podeEditar && painel !== null;
+  const editandoId = painelAberto && painel !== 'novo' ? Number(painel) : null;
+  const alunoEditado = editandoId ? alunos.find((aluno) => aluno.id === editandoId) : null;
   const [form, setForm] = useState(FORM_VAZIO);
-  const [editandoId, setEditandoId] = useState(null);
+  const [formInicial, setFormInicial] = useState(FORM_VAZIO); // o que veio da URL: base para saber se algo mudou
   const [errosForm, setErrosForm] = useState({});
   const [salvando, setSalvando] = useState(false);
-  const formRef = useRef(null);
 
   const carregar = useCallback(async () => {
     setErro('');
@@ -58,11 +76,24 @@ export default function AlunosPage() {
     carregar();
   }, [carregar]);
 
-  function descricao(aluno) {
-    const plano = planos.find((item) => item.id === aluno.planoId)?.nome ?? '—';
-    const responsavel = responsaveis.find((item) => item.id === aluno.usuarioRespId)?.nome;
-    return [aluno.instrumento, plano, responsavel && `Resp.: ${responsavel}`].filter(Boolean).join(' · ');
-  }
+  // O formulário segue a URL: vazio no cadastro e com os dados do aluno na edição — inclusive por link
+  // direto, assim que a lista carregar. Depende só da URL e do carregamento: recarregar a lista (ex.: após
+  // inativar outro aluno) não pode apagar o que a pessoa está digitando.
+  useEffect(() => {
+    setErrosForm({});
+    if (painel === null || painel === 'novo') {
+      setForm(FORM_VAZIO);
+      setFormInicial(FORM_VAZIO);
+      return;
+    }
+    if (carregando) return;
+    const aluno = alunos.find((item) => String(item.id) === painel);
+    if (aluno) {
+      setForm(dadosDoFormulario(aluno));
+      setFormInicial(dadosDoFormulario(aluno));
+    }
+    else fecharPainel(); // link para um aluno que não existe
+  }, [painel, carregando]);
 
   const termo = normalizar(busca.trim());
   const visiveis = alunos.filter(
@@ -77,33 +108,10 @@ export default function AlunosPage() {
     setForm((atual) => ({ ...atual, [name]: value }));
   }
 
-  function editar(aluno) {
-    setEditandoId(aluno.id);
-    setErrosForm({});
-    setAviso('');
-    setForm({
-      nome: aluno.nome,
-      contato: aluno.contato,
-      instrumento: aluno.instrumento,
-      planoId: String(aluno.planoId),
-      usuarioRespId: aluno.usuarioRespId ? String(aluno.usuarioRespId) : '',
-    });
-    // O formulário fica abaixo da lista: leva o usuário até ele.
-    formRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-    formRef.current?.elements.nome.focus({ preventScroll: true });
-  }
-
-  function cancelarEdicao() {
-    setEditandoId(null);
-    setErrosForm({});
-    setForm(FORM_VAZIO);
-  }
-
   async function salvar(evento) {
     evento.preventDefault();
     setSalvando(true);
     setErrosForm({});
-    setAviso('');
     const dados = {
       ...form,
       planoId: Number(form.planoId),
@@ -115,10 +123,9 @@ export default function AlunosPage() {
         setAviso(`Dados de ${form.nome.trim()} atualizados.`);
       } else {
         await api.post('/alunos', dados);
-        setAviso(`${form.nome.trim()} cadastrado(a).`);
+        setAviso(`Cadastro de ${form.nome.trim()} concluído.`);
       }
-      setEditandoId(null);
-      setForm(FORM_VAZIO);
+      fecharPainel();
       await carregar();
     } catch (e) {
       setErrosForm(mapearErros(e));
@@ -127,26 +134,90 @@ export default function AlunosPage() {
     }
   }
 
-  async function inativar(aluno) {
-    const mensagem = `Inativar ${aluno.nome}? As aulas futuras serão canceladas e não haverá novas mensalidades.`;
-    if (!window.confirm(mensagem)) return;
-    setAviso('');
+  /** Mensalidades em aberto do aluno (pendentes e atrasadas), para oferecer cancelá-las junto; sem acesso, nenhuma. */
+  async function cobrancasEmAberto(aluno) {
     try {
-      const { aulasCanceladas = 0 } = await api.patch(`/alunos/${aluno.id}/inativar`);
-      const detalhe = aulasCanceladas > 0 ? ` ${plural(aulasCanceladas, 'aula futura cancelada', 'aulas futuras canceladas')}.` : '';
-      setAviso(`${aluno.nome} inativado(a).${detalhe}`);
+      const todas = await api.get(`/mensalidades?mes=todos&alunoId=${aluno.id}`);
+      return todas.filter((mensalidade) => mensalidade.status === 'pendente' || mensalidade.status === 'atrasada');
+    } catch {
+      return []; // a inativação segue sem a opção
+    }
+  }
+
+  async function inativar(aluno) {
+    const abertas = await cobrancasEmAberto(aluno);
+    const total = abertas.reduce((soma, mensalidade) => soma + Number(mensalidade.valor), 0);
+    const quais = abertas.length === 1 ? 'a mensalidade' : `as ${abertas.length} mensalidades`;
+    const resposta = await confirmar({
+      titulo: `Inativar ${aluno.nome}?`,
+      mensagem:
+        'As próximas aulas serão retiradas da agenda, os horários ficarão disponíveis e não serão geradas novas ' +
+        'mensalidades. Em caso de reativação, as aulas futuras retornam à agenda, desde que o horário continue disponível.',
+      acao: 'Inativar',
+      // Quem saiu da escola pode ter mensalidades que não serão mais cobradas: a escola decide.
+      opcao:
+        abertas.length > 0
+          ? {
+              rotulo: `Cancelar também ${quais} em aberto (${formatarMoeda(total)})`,
+              dica: abertas.length === 1 ? 'Sem marcar, ela continua em aberto.' : 'Sem marcar, elas continuam em aberto.',
+            }
+          : null,
+    });
+    if (!resposta) return;
+    const cancelarMensalidades = resposta.opcao === true;
+    try {
+      const { aulasCanceladas = 0, mensalidadesCanceladas = 0 } = await api.patch(`/alunos/${aluno.id}/inativar`, {
+        cancelarMensalidades,
+      });
+      const partes = [`Cadastro de ${aluno.nome} inativado.`];
+      if (aulasCanceladas > 0) {
+        partes.push(`${plural(aulasCanceladas, 'aula foi retirada', 'aulas foram retiradas')} da agenda e os horários ficaram disponíveis.`);
+      }
+      if (mensalidadesCanceladas > 0) {
+        partes.push(`${plural(mensalidadesCanceladas, 'mensalidade cancelada', 'mensalidades canceladas')}.`);
+      }
+      setAviso(partes.join(' '));
       await carregar();
     } catch (e) {
       setErro(e.message);
     }
   }
 
+  /** Reativar devolve à agenda as aulas que a inativação cancelou; o aviso diz o que voltou e o que não. */
   async function reativar(aluno) {
-    setAviso('');
     try {
-      await api.patch(`/alunos/${aluno.id}/reativar`);
-      setAviso(`${aluno.nome} reativado(a). Agende as aulas na Agenda.`);
+      const { aulasRestauradas = 0, aulasNaoRestauradas = 0 } = (await api.patch(`/alunos/${aluno.id}/reativar`)) ?? {};
+      const partes = [`Cadastro de ${aluno.nome} reativado.`];
+      if (aulasRestauradas > 0) partes.push(`${plural(aulasRestauradas, 'aula retornou', 'aulas retornaram')} à agenda.`);
+      if (aulasNaoRestauradas > 0) {
+        partes.push(
+          `${plural(aulasNaoRestauradas, 'horário foi ocupado', 'horários foram ocupados')} nesse período; agende novamente na Agenda.`,
+        );
+      }
+      if (aulasRestauradas + aulasNaoRestauradas === 0) partes.push('Agende as aulas na Agenda.');
+      setAviso(partes.join(' '));
       await carregar();
+    } catch (e) {
+      setErro(e.message);
+    }
+  }
+
+  /** Exclusão permanente (só de inativos): apaga o cadastro e todo o histórico de aulas. */
+  async function excluir(aluno) {
+    const confirmado = await confirmar({
+      titulo: `Excluir ${aluno.nome} permanentemente?`,
+      mensagem: 'O cadastro e todo o histórico de aulas serão apagados. Isso não pode ser desfeito.',
+      acao: 'Excluir',
+      perigo: true,
+    });
+    if (!confirmado) return;
+    try {
+      const { aulasExcluidas = 0 } = (await api.delete(`/alunos/${aluno.id}`)) ?? {};
+      if (editandoId === aluno.id) fecharPainel();
+      const detalhe =
+        aulasExcluidas > 0 ? ` ${plural(aulasExcluidas, 'aula foi apagada', 'aulas foram apagadas')} do histórico.` : '';
+      await carregar(); // a lista atualiza antes do aviso, para ele não anunciar algo ainda visível
+      setAviso(`Cadastro de ${aluno.nome} excluído permanentemente.${detalhe}`);
     } catch (e) {
       setErro(e.message);
     }
@@ -154,134 +225,191 @@ export default function AlunosPage() {
 
   return (
     <section>
-      <h1 className="titulo">Alunos</h1>
+      <CabecalhoPagina titulo="Alunos">
+        {podeEditar && !painelAberto && (
+          <button type="button" className="botao botao-primario" onClick={() => abrirPainel('novo')}>
+            <Icone nome="mais" tamanho={18} />
+            Novo aluno
+          </button>
+        )}
+      </CabecalhoPagina>
+
       {erro && (
         <p className="alerta" role="alert">
           {erro}
         </p>
       )}
-      {aviso && (
-        <p className="aviso" role="status">
-          {aviso}
-        </p>
-      )}
+      <Aviso>{aviso}</Aviso>
 
-      <div className="card">
-        <div className="filtros">
-          <div className="segmentos" role="group" aria-label="Filtrar por situação">
-            {FILTROS.map((filtro) => (
-              <button
-                key={filtro.rotulo}
-                type="button"
-                className={`segmento${filtroStatus === filtro.valor ? ' ativo' : ''}`}
-                aria-pressed={filtroStatus === filtro.valor}
-                onClick={() => setFiltroStatus(filtro.valor)}
-              >
-                {filtro.rotulo} <small>{contagem(filtro.valor)}</small>
-              </button>
-            ))}
-          </div>
-          <input
-            type="search"
-            className="busca"
-            placeholder="Buscar por nome ou instrumento"
-            aria-label="Buscar aluno"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-          />
-        </div>
-
-        {carregando ? (
-          <p className="texto-suave">Carregando…</p>
-        ) : visiveis.length === 0 ? (
-          <p className="texto-suave">{alunos.length === 0 ? 'Nenhum aluno cadastrado.' : 'Nenhum aluno encontrado.'}</p>
-        ) : (
-          <ul className="lista">
-            {visiveis.map((aluno) => (
-              <li key={aluno.id} className="lista-item">
-                <span className="avatar" aria-hidden="true">
-                  {iniciais(aluno.nome)}
-                </span>
-                <div className="lista-texto">
-                  <strong>{aluno.nome}</strong>
-                  <small>{descricao(aluno)}</small>
-                </div>
-                <span className={`pill pill-${aluno.status}`}>{aluno.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>
-                {podeEditar && (
-                  <div className="acoes">
-                    <button type="button" className="botao botao-link" onClick={() => editar(aluno)}>
-                      Editar
+      {podeEditar && painelAberto && (
+        <Painel
+          titulo={editandoId ? 'Editar aluno' : 'Novo aluno'}
+          descricao={alunoEditado?.status === 'inativo' ? 'Cadastro inativo: sem aulas na agenda nem mensalidades novas.' : undefined}
+          onFechar={fecharPainel}
+          onSubmit={salvar}
+          erros={errosForm}
+          alterado={foiAlterado(form, formInicial)}
+          acao={
+            <button type="submit" className="botao botao-primario" disabled={salvando}>
+              {salvando ? 'Salvando…' : editandoId ? 'Salvar alterações' : 'Cadastrar aluno'}
+            </button>
+          }
+          // Ações sobre a situação do aluno ficam aqui, não na lista: a lista mostra só o essencial.
+          outrasAcoes={
+            alunoEditado && (
+              <>
+                {/* RF14 — presença, diário, reposições e mensalidades do aluno. */}
+                <Link to={`/alunos/${alunoEditado.id}`} className="botao botao-fantasma">
+                  Ver histórico
+                </Link>
+                {alunoEditado.status === 'ativo' ? (
+                  <button type="button" className="botao botao-fantasma" onClick={() => inativar(alunoEditado)}>
+                    Inativar aluno
+                  </button>
+                ) : (
+                  <>
+                    <button type="button" className="botao botao-fantasma" onClick={() => reativar(alunoEditado)}>
+                      Reativar aluno
                     </button>
-                    {aluno.status === 'ativo' ? (
-                      <button type="button" className="botao botao-link" onClick={() => inativar(aluno)}>
-                        Inativar
-                      </button>
-                    ) : (
-                      <button type="button" className="botao botao-link" onClick={() => reativar(aluno)}>
-                        Reativar
-                      </button>
-                    )}
-                  </div>
+                    <button type="button" className="botao botao-fantasma botao-perigo" onClick={() => excluir(alunoEditado)}>
+                      Excluir permanentemente
+                    </button>
+                  </>
                 )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {podeEditar && (
-        <form ref={formRef} className="card formulario" onSubmit={salvar} noValidate>
-          <h2>{editandoId ? 'Editar aluno' : 'Novo aluno'}</h2>
+              </>
+            )
+          }
+        >
           {errosForm.geral && (
             <p className="alerta" role="alert">
               {errosForm.geral}
             </p>
           )}
           <Campo rotulo="Nome" erro={errosForm.nome}>
-            <input name="nome" value={form.nome} onChange={alterarCampo} />
+            <input name="nome" autoComplete="off" value={form.nome} onChange={alterarCampo} />
           </Campo>
           <div className="grade">
-            <Campo rotulo="Contato (telefone ou e-mail)" erro={errosForm.contato}>
-              <input name="contato" value={form.contato} onChange={alterarCampo} />
+            <Campo rotulo="Contato" erro={errosForm.contato}>
+              <input
+              name="contato"
+              placeholder="Telefone ou e-mail"
+              autoComplete="off"
+              value={form.contato}
+              onChange={alterarCampo}
+              // Ao sair do campo, o telefone ganha o formato "(47) 99999-0001"; e-mail fica como foi digitado.
+              onBlur={() => setForm((atual) => ({ ...atual, contato: formatarContato(atual.contato) }))}
+            />
             </Campo>
             <Campo rotulo="Instrumento" erro={errosForm.instrumento}>
               <input name="instrumento" value={form.instrumento} onChange={alterarCampo} />
             </Campo>
           </div>
-          <div className="grade">
+          <div className="grade grade-plano">
             <Campo rotulo="Plano" erro={errosForm.planoId}>
               <select name="planoId" value={form.planoId} onChange={alterarCampo}>
                 <option value="">Selecione…</option>
                 {planos.map((plano) => (
                   <option key={plano.id} value={plano.id}>
-                    {plano.nome}
+                    {Number.isFinite(Number(plano.valor)) ? `${plano.nome} — ${formatarMoedaCurta(plano.valor)}` : plano.nome}
                   </option>
                 ))}
               </select>
             </Campo>
-            <Campo rotulo="Responsável (opcional)" erro={errosForm.usuarioRespId}>
+            <Campo
+              rotulo="Responsável (opcional)"
+              erro={errosForm.usuarioRespId}
+            >
               <select name="usuarioRespId" value={form.usuarioRespId} onChange={alterarCampo}>
                 <option value="">Sem responsável</option>
-                {responsaveis.map((responsavel) => (
-                  <option key={responsavel.id} value={responsavel.id}>
-                    {responsavel.nome}
-                  </option>
-                ))}
+                {/* Acesso desativado não entra em vínculo novo, mas o vínculo que já existe continua visível. */}
+                {responsaveis
+                  .filter((responsavel) => responsavel.ativo !== false || String(responsavel.id) === form.usuarioRespId)
+                  .map((responsavel) => (
+                    <option key={responsavel.id} value={responsavel.id}>
+                      {responsavel.nome}
+                    </option>
+                  ))}
               </select>
             </Campo>
           </div>
-          <div className="botoes">
-            <button type="submit" className="botao botao-primario" disabled={salvando}>
-              {salvando ? 'Salvando…' : editandoId ? 'Salvar alterações' : 'Cadastrar aluno'}
-            </button>
-            {editandoId && (
-              <button type="button" className="botao botao-secundario" onClick={cancelarEdicao}>
-                Cancelar edição
-              </button>
-            )}
-          </div>
-        </form>
+        </Painel>
       )}
+
+      <div className="filtros">
+        <div className="segmentos" role="group" aria-label="Filtrar por situação">
+          {FILTROS.map((filtro) => (
+            <button
+              key={filtro.rotulo}
+              type="button"
+              className={`segmento${filtroStatus === filtro.valor ? ' ativo' : ''}`}
+              aria-pressed={filtroStatus === filtro.valor}
+              onClick={() => setFiltroStatus(filtro.valor)}
+            >
+              {filtro.rotulo} <small>{contagem(filtro.valor)}</small>
+            </button>
+          ))}
+        </div>
+        <div className="busca">
+          <Icone nome="busca" tamanho={18} />
+          <input
+            type="search"
+            enterKeyHint="search"
+            placeholder="Buscar por nome ou instrumento"
+            aria-label="Buscar aluno"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {carregando ? (
+        <div className="card">
+          <Carregando linhas={4} />
+        </div>
+      ) : visiveis.length === 0 ? (
+        <div className="card">
+          <Vazio
+            icone={alunos.length === 0 ? 'alunos' : 'busca'}
+            titulo={alunos.length === 0 ? 'Nenhum aluno cadastrado.' : 'Nenhum aluno encontrado.'}
+          />
+        </div>
+      ) : (
+        <div className="card card-lista">
+          <ul className="lista">
+            {visiveis.map((aluno) => {
+              const conteudo = (
+                <>
+                  <span className="avatar" aria-hidden="true">
+                    {iniciais(aluno.nome)}
+                  </span>
+                  <span className="linha-texto">
+                    <strong>{aluno.nome}</strong>
+                    <small>{aluno.instrumento}</small>
+                  </span>
+                  {/* Em "Todos", o selo diferencia os inativos; nos outros filtros seria redundante. */}
+                  {!filtroStatus && aluno.status === 'inativo' && <span className="pill pill-inativo">Inativo</span>}
+                  <Icone nome="proximo" tamanho={18} className="linha-seta" />
+                </>
+              );
+              return (
+                <li key={aluno.id}>
+                  {/* A coordenação abre o cadastro (com o histórico a um toque); o professor, o histórico (RF14). */}
+                  {podeEditar ? (
+                    <button type="button" className="linha" onClick={() => abrirPainel(aluno.id)}>
+                      {conteudo}
+                    </button>
+                  ) : (
+                    <Link to={`/alunos/${aluno.id}`} className="linha">
+                      {conteudo}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {confirmacao}
     </section>
   );
 }

@@ -1,5 +1,8 @@
-// Modelo de dados do Sistema EMMOO — espelha o DER da RFC (Figura 6).
+// Modelo de dados do Sistema EMMOO — espelha o DER da RFC (Figura 6), estendido para várias escolas.
 // Tabelas em snake_case (@@map) e campos em camelCase no código (@map).
+//
+// Multi-tenant (ADR 12): um banco só, e toda tabela com dados de uma escola tem `escola_id`.
+// O isolamento é garantido na camada de repositórios (ver infra/*/…Repositories.js → paraEscola).
 
 generator client {
   provider = "prisma-client-js"
@@ -33,9 +36,19 @@ enum StatusAula {
   cancelada
 }
 
+/// Por que a aula foi cancelada: à mão (agenda), pela inativação do aluno ou por um feriado/recesso.
+/// As duas últimas saem da agenda e voltam quando o motivo deixa de existir (aluno reativado, feriado removido).
+enum MotivoCancelamento {
+  manual
+  inativacao
+  feriado
+}
+
+/// falta (RF06), reposição (RF07) e remarcação de uma aula agendada (nova data/hora, mesma aula).
 enum TipoSolicitacao {
   falta
   reposicao
+  remarcacao
 }
 
 enum StatusSolicitacao {
@@ -44,30 +57,98 @@ enum StatusSolicitacao {
   recusada
 }
 
+/// cancelada: a escola desistiu de cobrar (ex.: aluno que saiu); não conta nos totais nem gera alerta.
 enum StatusMensalidade {
   pendente
   paga
   atrasada
+  cancelada
+}
+
+/// RF12 — alerta de pagamento por e-mail: vencimento próximo ou atraso (um de cada por mensalidade).
+enum TipoAlerta {
+  vencimento
+  atraso
+}
+
+/// Alerta que não pôde ser enviado (e-mail não configurado ou falha) fica pendente para reenvio.
+enum StatusAlerta {
+  pendente
+  enviado
+}
+
+/// Cada escola atendida pelo sistema (o "tenant"). O código identifica a escola no login (ex.: "emmoo").
+model Escola {
+  id           Int      @id @default(autoincrement())
+  nome         String   @db.VarChar(120)
+  codigo       String   @unique @db.VarChar(40)
+  /// Pix para o responsável pagar a mensalidade (QR e "copia e cola"): tipo, chave, nome e cidade do recebedor.
+  pixTipo      String?  @map("pix_tipo") @db.VarChar(12)
+  pixChave     String?  @map("pix_chave") @db.VarChar(77)
+  pixRecebedor String?  @map("pix_recebedor") @db.VarChar(25)
+  pixCidade    String?  @map("pix_cidade") @db.VarChar(15)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  usuarios            Usuario[]
+  planos              Plano[]
+  alunos              Aluno[]
+  horariosDisponiveis HorarioDisponivel[]
+  aulas               Aula[]
+  diarios             DiarioAula[]
+  solicitacoes        Solicitacao[]
+  mensalidades        Mensalidade[]
+  feriados            Feriado[]
+  alertas             Alerta[]
+  redefinicoesDeSenha RedefinicaoSenha[]
+
+  @@map("escola")
+}
+
+/// Dias sem aula da escola: um feriado (início = fim) ou um recesso (vários dias seguidos).
+model Feriado {
+  id        Int      @id @default(autoincrement())
+  escolaId  Int      @map("escola_id")
+  descricao String   @db.VarChar(80)
+  inicio    DateTime @db.Date
+  fim       DateTime @db.Date
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  escola Escola @relation(fields: [escolaId], references: [id])
+
+  @@index([escolaId, inicio])
+  @@map("feriado")
 }
 
 model Usuario {
   id           Int      @id @default(autoincrement())
+  escolaId     Int      @map("escola_id")
   nome         String   @db.VarChar(120)
-  email        String   @unique @db.VarChar(160)
+  email        String   @db.VarChar(160)
+  login        String?  @db.VarChar(40) // usuário para entrar sem o e-mail (ex.: "admin"); opcional
   senhaHash    String   @map("senha_hash") @db.VarChar(100)
   papel        Papel
+  ativo        Boolean  @default(true) // desativado: não entra mais e a sessão aberta é encerrada
+  // Sobe a cada desativação, troca de perfil ou senha redefinida pela coordenação: tokens antigos deixam de valer.
+  versaoSessao Int      @default(0) @map("versao_sessao")
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
+  escola              Escola              @relation(fields: [escolaId], references: [id])
   alunosResponsavel   Aluno[]
   horariosDisponiveis HorarioDisponivel[]
   aulas               Aula[]
+  redefinicoesDeSenha RedefinicaoSenha[]
 
+  // E-mail e usuário são únicos dentro da escola: duas escolas podem ter cada uma o seu "admin".
+  @@unique([escolaId, email])
+  @@unique([escolaId, login])
   @@map("usuario")
 }
 
 model Plano {
   id           Int       @id @default(autoincrement())
+  escolaId     Int       @map("escola_id")
   nome         String    @db.VarChar(80)
   tipo         TipoPlano
   valor        Decimal   @db.Decimal(10, 2)
@@ -76,13 +157,16 @@ model Plano {
   criadoEm     DateTime  @default(now()) @map("criado_em")
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
 
+  escola Escola  @relation(fields: [escolaId], references: [id])
   alunos Aluno[]
 
+  @@index([escolaId])
   @@map("plano")
 }
 
 model Aluno {
   id            Int         @id @default(autoincrement())
+  escolaId      Int         @map("escola_id")
   nome          String      @db.VarChar(120)
   contato       String      @db.VarChar(120)
   instrumento   String      @db.VarChar(60)
@@ -92,89 +176,166 @@ model Aluno {
   criadoEm      DateTime    @default(now()) @map("criado_em")
   atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
 
+  escola       Escola        @relation(fields: [escolaId], references: [id])
   plano        Plano         @relation(fields: [planoId], references: [id])
   responsavel  Usuario?      @relation(fields: [usuarioRespId], references: [id])
   aulas        Aula[]
   solicitacoes Solicitacao[]
   mensalidades Mensalidade[]
 
+  @@index([escolaId, status])
   @@map("aluno")
 }
 
 model HorarioDisponivel {
   id          Int     @id @default(autoincrement())
+  escolaId    Int     @map("escola_id")
   professorId Int     @map("professor_id")
   diaSemana   Int     @map("dia_semana") // 0 = domingo ... 6 = sábado
   horaInicio  String  @map("hora_inicio") @db.VarChar(5) // formato "HH:MM"
   duracaoMin  Int     @default(45) @map("duracao_min")
   disponivel  Boolean @default(true)
 
+  escola    Escola  @relation(fields: [escolaId], references: [id])
   professor Usuario @relation(fields: [professorId], references: [id])
 
   @@unique([professorId, diaSemana, horaInicio])
+  @@index([escolaId])
   @@map("horario_disponivel")
 }
 
 model Aula {
-  id          Int        @id @default(autoincrement())
-  alunoId     Int        @map("aluno_id")
-  professorId Int        @map("professor_id")
-  data        DateTime   @db.Date
-  hora        String     @db.VarChar(5) // formato "HH:MM"
-  duracaoMin  Int        @default(45) @map("duracao_min")
-  status      StatusAula @default(agendada)
-  criadoEm    DateTime   @default(now()) @map("criado_em")
+  id                 Int                 @id @default(autoincrement())
+  escolaId           Int                 @map("escola_id")
+  alunoId            Int                 @map("aluno_id")
+  professorId        Int                 @map("professor_id")
+  data               DateTime            @db.Date
+  hora               String              @db.VarChar(5) // formato "HH:MM"
+  duracaoMin         Int                 @default(45) @map("duracao_min")
+  status             StatusAula          @default(agendada)
+  /// Preenchido só quando status = cancelada (aulas canceladas antes deste campo ficam nulas = à mão).
+  motivoCancelamento MotivoCancelamento? @map("motivo_cancelamento")
+  /// RF07 — esta aula é a reposição de outra (a que o aluno perdeu); nula nas aulas normais.
+  reposicaoDeId      Int?                @map("reposicao_de_id")
+  criadoEm           DateTime            @default(now()) @map("criado_em")
 
+  escola       Escola        @relation(fields: [escolaId], references: [id])
   aluno        Aluno         @relation(fields: [alunoId], references: [id])
   professor    Usuario       @relation(fields: [professorId], references: [id])
   diario       DiarioAula?
   solicitacoes Solicitacao[]
+  reposicaoDe  Aula?         @relation("Reposicao", fields: [reposicaoDeId], references: [id], onDelete: SetNull)
+  reposicoes   Aula[]        @relation("Reposicao")
 
   // RN09/RN10 — o conflito é verificado no serviço por sobreposição de intervalos (não só hora igual).
   // Uma restrição única aqui impediria reagendar o horário de uma aula cancelada, que fica no histórico.
+  @@index([escolaId, data])
   @@index([professorId, data])
   @@index([alunoId, data])
+  @@index([reposicaoDeId])
   @@map("aula")
 }
 
 model DiarioAula {
   id                 Int     @id @default(autoincrement())
+  escolaId           Int     @map("escola_id")
   aulaId             Int     @unique @map("aula_id")
   conteudoMinistrado String  @map("conteudo_ministrado") @db.Text
   planoProxima       String? @map("plano_proxima") @db.Text
 
-  aula Aula @relation(fields: [aulaId], references: [id])
+  escola Escola @relation(fields: [escolaId], references: [id])
+  aula   Aula   @relation(fields: [aulaId], references: [id])
 
+  @@index([escolaId])
   @@map("diario_aula")
 }
 
 model Solicitacao {
   id              Int               @id @default(autoincrement())
+  escolaId        Int               @map("escola_id")
   alunoId         Int               @map("aluno_id")
   aulaId          Int?              @map("aula_id")
   tipo            TipoSolicitacao
   dataSolicitacao DateTime          @default(now()) @map("data_solicitacao")
   status          StatusSolicitacao @default(pendente)
   novaData        DateTime?         @map("nova_data")
+  /// Remarcação: a data e hora que a aula tinha antes (a nova fica em `novaData`).
+  dataAnterior    DateTime?         @map("data_anterior")
+  /// RF06/RN05 — aviso de falta feito com a antecedência mínima: a falta dá direito a reposição.
+  liberaReposicao Boolean           @default(false) @map("libera_reposicao")
 
-  aluno Aluno @relation(fields: [alunoId], references: [id])
-  aula  Aula? @relation(fields: [aulaId], references: [id])
+  escola Escola @relation(fields: [escolaId], references: [id])
+  aluno  Aluno  @relation(fields: [alunoId], references: [id])
+  aula   Aula?  @relation(fields: [aulaId], references: [id])
 
+  @@index([escolaId])
   @@map("solicitacao")
 }
 
 model Mensalidade {
-  id             Int               @id @default(autoincrement())
-  alunoId        Int               @map("aluno_id")
-  mesReferencia  String            @map("mes_referencia") @db.VarChar(7) // formato "AAAA-MM"
-  valor          Decimal           @db.Decimal(10, 2)
-  vencimento     DateTime          @db.Date
-  status         StatusMensalidade @default(pendente)
-  dataPagamento  DateTime?         @map("data_pagamento") @db.Date
-  formaPagamento String?           @map("forma_pagamento") @db.VarChar(30)
+  id                 Int               @id @default(autoincrement())
+  escolaId           Int               @map("escola_id")
+  alunoId            Int               @map("aluno_id")
+  mesReferencia      String            @map("mes_referencia") @db.VarChar(7) // formato "AAAA-MM"
+  valor              Decimal           @db.Decimal(10, 2)
+  vencimento         DateTime          @db.Date
+  status             StatusMensalidade @default(pendente)
+  dataPagamento      DateTime?         @map("data_pagamento") @db.Date
+  formaPagamento     String?           @map("forma_pagamento") @db.VarChar(30)
+  /// Ajuste de valor (desconto, bolsa, correção): o valor do plano antes do ajuste e o motivo; nulos sem ajuste.
+  valorOriginal      Decimal?          @map("valor_original") @db.Decimal(10, 2)
+  ajusteMotivo       String?           @map("ajuste_motivo") @db.VarChar(160)
+  /// Por que a mensalidade foi cancelada (status = cancelada).
+  cancelamentoMotivo String?           @map("cancelamento_motivo") @db.VarChar(160)
+  /// RF15 — número do recibo, sequencial por escola; dado na primeira baixa e mantido se a baixa for desfeita.
+  numeroRecibo       Int?              @map("numero_recibo")
 
-  aluno Aluno @relation(fields: [alunoId], references: [id])
+  escola  Escola   @relation(fields: [escolaId], references: [id])
+  aluno   Aluno    @relation(fields: [alunoId], references: [id])
+  alertas Alerta[]
 
   @@unique([alunoId, mesReferencia])
+  @@unique([escolaId, numeroRecibo])
+  @@index([escolaId])
+  @@index([escolaId, mesReferencia])
   @@map("mensalidade")
+}
+
+/// "Esqueci minha senha": pedido de redefinição por e-mail. Guarda só o hash do token (o link leva o token),
+/// vale por pouco tempo e uma vez só.
+model RedefinicaoSenha {
+  id        Int       @id @default(autoincrement())
+  escolaId  Int       @map("escola_id")
+  usuarioId Int       @map("usuario_id")
+  tokenHash String    @unique @map("token_hash") @db.Char(64)
+  expiraEm  DateTime  @map("expira_em")
+  usadoEm   DateTime? @map("usado_em")
+  criadoEm  DateTime  @default(now()) @map("criado_em")
+
+  escola  Escola  @relation(fields: [escolaId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("redefinicao_senha")
+}
+
+/// RF12 — alertas de pagamento enviados por e-mail ao responsável (fila: o que falhar fica pendente).
+model Alerta {
+  id            Int          @id @default(autoincrement())
+  escolaId      Int          @map("escola_id")
+  mensalidadeId Int          @map("mensalidade_id")
+  tipo          TipoAlerta
+  destinatario  String       @db.VarChar(160)
+  status        StatusAlerta @default(pendente)
+  tentativas    Int          @default(0)
+  ultimoErro    String?      @map("ultimo_erro") @db.VarChar(200)
+  criadoEm      DateTime     @default(now()) @map("criado_em")
+  enviadoEm     DateTime?    @map("enviado_em")
+
+  escola      Escola      @relation(fields: [escolaId], references: [id])
+  mensalidade Mensalidade @relation(fields: [mensalidadeId], references: [id], onDelete: Cascade)
+
+  @@unique([mensalidadeId, tipo])
+  @@index([escolaId, status])
+  @@map("alerta")
 }

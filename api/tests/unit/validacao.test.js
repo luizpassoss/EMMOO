@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { validarAluno } from '../../src/modules/alunos/aluno.validator.js';
 import { validarAgendamento } from '../../src/modules/aulas/aula.validator.js';
+import { validarCadastroEscola } from '../../src/modules/escolas/escola.validator.js';
 import { validarHorario } from '../../src/modules/horarios/horario.validator.js';
 import { validarPlano } from '../../src/modules/planos/plano.validator.js';
+import { validarUsuario } from '../../src/modules/usuarios/usuario.validator.js';
 import { AppError, ValidationError } from '../../src/shared/errors.js';
 import {
   assertValid,
@@ -69,12 +71,12 @@ describe('utilitários de validação', () => {
 });
 
 describe('validarPlano (RF03)', () => {
-  const valido = { nome: ' Particular 1x ', tipo: 'particular', valor: '140', freqSemanal: 1 };
+  const valido = { nome: ' Particular · 1 aula por semana ', tipo: 'particular', valor: '140', freqSemanal: 1 };
 
   it('normaliza um plano válido e aplica duração padrão de 45 min', () => {
     const { erros, dados } = validarPlano(valido);
     assert.deepEqual(erros, []);
-    assert.deepEqual(dados, { nome: 'Particular 1x', tipo: 'particular', valor: 140, freqSemanal: 1, duracaoMin: 45 });
+    assert.deepEqual(dados, { nome: 'Particular · 1 aula por semana', tipo: 'particular', valor: 140, freqSemanal: 1, duracaoMin: 45 });
   });
   it('arredonda o valor para centavos', () => {
     assert.equal(validarPlano({ ...valido, valor: 99.999 }).dados.valor, 100);
@@ -162,5 +164,62 @@ describe('validarAgendamento (RF05)', () => {
     assert.equal(dados, null);
     assert.deepEqual(erros.map((e) => e.campo), ['alunoId', 'professorId', 'data', 'hora', 'duracaoMin', 'semanas']);
     assert.equal(validarAgendamento().erros.length, 4);
+  });
+});
+
+describe('validarUsuario (RF01)', () => {
+  const valido = { nome: ' Bia ', email: ' BIA@Sol.com ', login: ' Bia.Silva ', senha: 'segredo', papel: 'professor' };
+
+  it('normaliza nome, e-mail e usuário', () => {
+    assert.deepEqual(validarUsuario(valido).dados, {
+      nome: 'Bia',
+      email: 'bia@sol.com',
+      login: 'bia.silva',
+      senha: 'segredo',
+      papel: 'professor',
+    });
+  });
+  it('o usuário é opcional (entra pelo e-mail)', () => {
+    for (const login of [undefined, null, '', '   ']) {
+      assert.equal(validarUsuario({ ...valido, login }).dados.login, null);
+    }
+  });
+  it('aponta os campos inválidos', () => {
+    const { erros, dados } = validarUsuario({ nome: 'B', email: 'sem-arroba', login: 'a@b', senha: '123', papel: 'aluno' });
+    assert.equal(dados, null);
+    assert.deepEqual(erros.map((e) => e.campo), ['nome', 'email', 'login', 'senha', 'papel']);
+    assert.equal(validarUsuario().erros.length, 4); // nome, e-mail, senha e papel
+    assert.equal(validarUsuario({ ...valido, login: 'ab' }).erros[0].campo, 'login'); // curto demais
+  });
+  it('na edição, senha em branco mantém a atual; se informada, segue o mínimo', () => {
+    const semSenha = validarUsuario({ ...valido, senha: '' }, { exigirSenha: false });
+    assert.deepEqual([semSenha.erros, semSenha.dados.senha], [[], null]);
+    assert.deepEqual(validarUsuario({ ...valido, senha: '123' }, { exigirSenha: false }).erros.map((e) => e.campo), ['senha']);
+    assert.deepEqual(validarUsuario({ ...valido, senha: '' }).erros.map((e) => e.campo), ['senha']);
+  });
+});
+
+describe('validarCadastroEscola (multi-tenant)', () => {
+  const valido = { nomeEscola: ' Escola Sol ', codigo: ' Escola-Sol ', nome: 'Rita', email: 'rita@sol.com', senha: 'segredo' };
+
+  it('separa a escola de quem vai coordená-la', () => {
+    assert.deepEqual(validarCadastroEscola(valido).dados, {
+      escola: { nome: 'Escola Sol', codigo: 'escola-sol' },
+      responsavel: { nome: 'Rita', email: 'rita@sol.com', login: null, senha: 'segredo' },
+    });
+  });
+  it('o código vira parte do acesso: só minúsculas, números e hífen, sem hífen nas pontas', () => {
+    for (const codigo of ['sol', 'escola-sol-2', 'a1b']) {
+      assert.equal(validarCadastroEscola({ ...valido, codigo }).erros.length, 0, codigo);
+    }
+    for (const codigo of ['so', '-sol', 'sol-', 'escola sol', 'escola_sol', 'açaí', 'a'.repeat(41), 42]) {
+      assert.deepEqual(validarCadastroEscola({ ...valido, codigo }).erros.map((e) => e.campo), ['codigo'], String(codigo));
+    }
+  });
+  it('aponta todos os campos inválidos, da escola e da pessoa', () => {
+    const { erros, dados } = validarCadastroEscola({ nomeEscola: 'AB', codigo: 'x', nome: '', email: 'x', senha: '1' });
+    assert.equal(dados, null);
+    assert.deepEqual(erros.map((e) => e.campo), ['nomeEscola', 'codigo', 'nome', 'email', 'senha']);
+    assert.equal(validarCadastroEscola().erros.length, 5);
   });
 });

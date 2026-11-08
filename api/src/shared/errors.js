@@ -38,6 +38,13 @@ export class NotFoundError extends AppError {
   }
 }
 
+/** Muitas tentativas em pouco tempo (ex.: senha errada repetidas vezes): espere antes de tentar de novo. */
+export class TooManyRequestsError extends AppError {
+  constructor(message = 'Muitas tentativas. Tente novamente em alguns minutos.') {
+    super(message, { status: 429, code: 'TOO_MANY_REQUESTS' });
+  }
+}
+
 export class ConflictError extends AppError {
   /** @param {{ campo: string, mensagem: string }[]} [details] */
   constructor(message = 'Conflito com o estado atual do recurso.', details) {

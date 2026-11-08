@@ -1,1 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#1a1a1a"/><text x="16" y="23" font-size="18" text-anchor="middle" fill="#fff" font-family="Arial">♫</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="3 3 18 18">
+  <!-- Marca do EMMOO: a mesma colcheia dupla (♫) do app. Escura em abas claras, clara em abas escuras. -->
+  <style>
+    .nota { fill: #1c1917; }
+    @media (prefers-color-scheme: dark) { .nota { fill: #f5f5f4; } }
+  </style>
+  <g class="nota">
+    <ellipse cx="7.4" cy="17.7" rx="3.15" ry="2.3" transform="rotate(-22 7.4 17.7)"/>
+    <ellipse cx="16.6" cy="15.6" rx="3.15" ry="2.3" transform="rotate(-22 16.6 15.6)"/>
+    <rect x="8.95" y="6.6" width="1.5" height="10.6" rx="0.2"/>
+    <rect x="18.1" y="4.5" width="1.5" height="10.6" rx="0.2"/>
+    <path d="M8.95 6.05 19.6 3.95v2.75L8.95 8.8z"/>
+  </g>
+</svg>

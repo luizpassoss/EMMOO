@@ -5,6 +5,8 @@ import { createErrorHandler, notFound } from '../../src/middlewares/errorHandler
 import { createAlunoController } from '../../src/modules/alunos/aluno.controller.js';
 import { createAulaController } from '../../src/modules/aulas/aula.controller.js';
 import { createAuthController } from '../../src/modules/auth/auth.controller.js';
+import { createEscolaController } from '../../src/modules/escolas/escola.controller.js';
+import { createFeriadoController } from '../../src/modules/feriados/feriado.controller.js';
 import { createHorarioController } from '../../src/modules/horarios/horario.controller.js';
 import { createPlanoController } from '../../src/modules/planos/plano.controller.js';
 import { createUsuarioController } from '../../src/modules/usuarios/usuario.controller.js';
@@ -19,7 +21,13 @@ function capturarNext() {
 }
 
 describe('middleware authenticate', () => {
-  const { authenticate } = createAuthMiddleware(tokenServiceFake);
+  const servicosPedidos = [];
+  const { authenticate } = createAuthMiddleware(tokenServiceFake, {
+    servicosDaEscola: (escolaId) => {
+      servicosPedidos.push(escolaId);
+      return { daEscola: escolaId };
+    },
+  });
 
   it('recusa requisição sem token ou com esquema errado', () => {
     for (const authorization of [undefined, 'Basic abc', 'Bearer']) {
@@ -33,12 +41,63 @@ describe('middleware authenticate', () => {
     authenticate({}, {}, next);
     assert.ok(chamadas[0] instanceof UnauthorizedError);
   });
-  it('preenche req.usuario com token válido', () => {
-    const req = { headers: { authorization: 'bearer token:7:professor' } };
+  it('preenche req.usuario e os serviços da escola do token', () => {
+    const req = { headers: { authorization: 'bearer token:7:professor:3' } };
     const { next, chamadas } = capturarNext();
     authenticate(req, {}, next);
-    assert.deepEqual(req.usuario, { id: 7, papel: 'professor' });
+    assert.deepEqual(req.usuario, { id: 7, papel: 'professor', escolaId: 3 });
+    assert.deepEqual(req.servicos, { daEscola: 3 });
+    assert.deepEqual(servicosPedidos, [3]);
     assert.equal(chamadas[0], undefined);
+  });
+  it('token sem escola (anterior ao multi-tenant) pede para entrar de novo', () => {
+    for (const authorization of ['Bearer token:7:professor', 'Bearer token:7:professor:0', 'Bearer token:7:professor:abc']) {
+      const req = { headers: { authorization } };
+      const { next, chamadas } = capturarNext();
+      authenticate(req, {}, next);
+      assert.ok(chamadas[0] instanceof UnauthorizedError, authorization);
+      assert.equal(chamadas[0].message, 'Sessão expirada. Entre novamente.');
+      assert.equal(req.usuario, undefined);
+    }
+  });
+  it('com verificarSessao, usa o perfil atual do banco e encerra sessão que não vale mais', async () => {
+    const consultas = [];
+    const { authenticate: comSessao } = createAuthMiddleware(tokenServiceFake, {
+      verificarSessao: async (sessao) => {
+        consultas.push(sessao);
+        if (sessao.versao !== 2) return null; // desativado ou com perfil/senha alterados depois do token
+        return { id: 7, papel: 'coordenacao' };
+      },
+    });
+    const valida = { headers: { authorization: 'Bearer token:7:professor:3:2' } };
+    const { next, chamadas } = capturarNext();
+    await comSessao(valida, {}, next);
+    assert.deepEqual(valida.usuario, { id: 7, papel: 'coordenacao', escolaId: 3 }); // perfil do banco, não do token
+    assert.deepEqual(consultas[0], { usuarioId: 7, escolaId: 3, versao: 2 });
+    assert.equal(chamadas[0], undefined);
+
+    const antiga = { headers: { authorization: 'Bearer token:7:professor:3' } }; // sem versão = 0
+    const encerrada = capturarNext();
+    await comSessao(antiga, {}, encerrada.next);
+    assert.ok(encerrada.chamadas[0] instanceof UnauthorizedError);
+    assert.equal(encerrada.chamadas[0].message, 'Sessão encerrada. Entre novamente.');
+    assert.equal(antiga.usuario, undefined);
+  });
+  it('erro ao conferir a sessão segue para o tratamento de erros', async () => {
+    const falha = new Error('banco fora do ar');
+    const { authenticate: comSessao } = createAuthMiddleware(tokenServiceFake, {
+      verificarSessao: async () => {
+        throw falha;
+      },
+    });
+    const { next, chamadas } = capturarNext();
+    await comSessao({ headers: { authorization: 'Bearer token:7:professor:3' } }, {}, next);
+    assert.equal(chamadas[0], falha);
+  });
+  it('sem servicosDaEscola, só identifica o usuário', () => {
+    const req = { headers: { authorization: 'Bearer token:7:professor:3' } };
+    createAuthMiddleware(tokenServiceFake).authenticate(req, {}, () => {});
+    assert.deepEqual([req.usuario.escolaId, req.servicos], [3, undefined]);
   });
   it('propaga erro de token inválido', () => {
     const { next, chamadas } = capturarNext();
@@ -146,21 +205,71 @@ describe('asyncHandler', () => {
 });
 
 describe('controllers', () => {
-  it('AuthController delega login e perfil', async () => {
+  it('AuthController delega login e perfil (na escola do token)', async () => {
     const controller = createAuthController({
       login: async (dados) => ({ recebido: dados }),
-      perfil: async (id) => ({ id }),
+      perfil: async (id, escolaId) => ({ id, escolaId }),
     });
     const res1 = criarRespostaFake();
     await controller.login({}, res1);
     assert.deepEqual(res1.body, { recebido: {} });
     const res2 = criarRespostaFake();
-    await controller.perfil({ usuario: { id: 5 } }, res2);
-    assert.deepEqual(res2.body, { id: 5 });
+    await controller.perfil({ usuario: { id: 5, escolaId: 2 } }, res2);
+    assert.deepEqual(res2.body, { id: 5, escolaId: 2 });
+  });
+
+  it('EscolaController informa a configuração e cadastra (201)', async () => {
+    const controller = createEscolaController({
+      configuracao: () => ({ cadastroDeEscolas: true }),
+      cadastrar: async (dados) => ({ recebido: dados }),
+    });
+    const config = criarRespostaFake();
+    await controller.configuracao({}, config);
+    assert.deepEqual(config.body, { cadastroDeEscolas: true });
+    const criada = criarRespostaFake();
+    await controller.cadastrar({ body: { codigo: 'sol' } }, criada);
+    assert.deepEqual([criada.statusCode, criada.body], [201, { recebido: { codigo: 'sol' } }]);
+    const semCorpo = criarRespostaFake();
+    await controller.cadastrar({}, semCorpo);
+    assert.deepEqual(semCorpo.body, { recebido: {} });
+  });
+
+  it('FeriadoController lista pelo período, cadastra (201) e remove', async () => {
+    const controller = createFeriadoController(() => ({
+      listar: async (query) => ({ query }),
+      criar: async (dados) => ({ id: 1, ...dados }),
+      remover: async (id) => ({ id, aulasRestauradas: 2 }),
+    }));
+    const lista = criarRespostaFake();
+    await controller.listar({ query: { inicio: 'a', fim: 'b' } }, lista);
+    assert.deepEqual(lista.body, { query: { inicio: 'a', fim: 'b' } });
+    const semQuery = criarRespostaFake();
+    await controller.listar({}, semQuery);
+    assert.deepEqual(semQuery.body, { query: {} });
+    const criado = criarRespostaFake();
+    await controller.criar({ body: { descricao: 'Carnaval' } }, criado);
+    assert.deepEqual([criado.statusCode, criado.body], [201, { id: 1, descricao: 'Carnaval' }]);
+    const semCorpo = criarRespostaFake();
+    await controller.criar({}, semCorpo);
+    assert.deepEqual(semCorpo.body, { id: 1 });
+    const removido = criarRespostaFake();
+    await controller.remover({ params: { id: '1' } }, removido);
+    assert.deepEqual(removido.body, { id: '1', aulasRestauradas: 2 });
+  });
+
+  it('controllers da escola usam o serviço resolvido para cada requisição', async () => {
+    const pedidos = [];
+    const controller = createPlanoController((req) => {
+      pedidos.push(req.servicos);
+      return { listar: async () => [req.servicos] };
+    });
+    const res = criarRespostaFake();
+    await controller.listar({ servicos: 'escola-2' }, res);
+    assert.deepEqual([res.body, pedidos], [['escola-2'], ['escola-2']]);
   });
 
   it('PlanoController lista e cria (201)', async () => {
-    const controller = createPlanoController({ listar: async () => ['p'], criar: async (d) => ({ ...d, id: 1 }) });
+    const controller = createPlanoController(() => ({ listar: async () => ['p'], criar: async (d) => ({ ...d, id: 1 }) }));
     const lista = criarRespostaFake();
     await controller.listar({}, lista);
     assert.deepEqual(lista.body, ['p']);
@@ -172,6 +281,24 @@ describe('controllers', () => {
     assert.deepEqual(semCorpo.body, { id: 1 });
   });
 
+  it('PlanoController edita (200) e exclui (204)', async () => {
+    const excluidos = [];
+    const controller = createPlanoController(() => ({
+      atualizar: async (id, dados) => ({ id, ...dados }),
+      excluir: async (id) => excluidos.push(id),
+    }));
+    const editado = criarRespostaFake();
+    await controller.atualizar({ params: { id: '2' }, body: { valor: 99 } }, editado);
+    assert.deepEqual(editado.body, { id: '2', valor: 99 });
+    const semCorpo = criarRespostaFake();
+    await controller.atualizar({ params: { id: '2' } }, semCorpo);
+    assert.deepEqual(semCorpo.body, { id: '2' });
+    const excluido = criarRespostaFake();
+    await controller.excluir({ params: { id: '2' } }, excluido);
+    assert.equal(excluido.statusCode, 204);
+    assert.deepEqual(excluidos, ['2']);
+  });
+
   it('AlunoController repassa query, params e corpo', async () => {
     const service = {
       listar: async (filtro) => filtro,
@@ -180,8 +307,9 @@ describe('controllers', () => {
       atualizar: async (id, dados) => ({ id, ...dados }),
       inativar: async (id) => ({ id, status: 'inativo' }),
       reativar: async (id) => ({ id, status: 'ativo' }),
+      excluir: async (id) => ({ id, aulasExcluidas: 2 }),
     };
-    const controller = createAlunoController(service);
+    const controller = createAlunoController(() => service);
     const cenarios = [
       ['listar', { query: { status: 'ativo' } }, { status: 'ativo' }, 200],
       ['listar', {}, { status: undefined }, 200],
@@ -192,6 +320,7 @@ describe('controllers', () => {
       ['atualizar', { params: { id: '3' } }, { id: '3' }, 200],
       ['inativar', { params: { id: '3' } }, { id: '3', status: 'inativo' }, 200],
       ['reativar', { params: { id: '3' } }, { id: '3', status: 'ativo' }, 200],
+      ['excluir', { params: { id: '3' } }, { id: '3', aulasExcluidas: 2 }, 200],
     ];
     for (const [metodo, req, esperado, status] of cenarios) {
       const res = criarRespostaFake();
@@ -201,25 +330,50 @@ describe('controllers', () => {
     }
   });
 
-  it('UsuarioController repassa o filtro de papel', async () => {
-    const controller = createUsuarioController({ listar: async (filtro) => filtro });
+  it('UsuarioController lista por papel, cria (201) e edita com o usuário logado', async () => {
+    const usuario = { id: 1, papel: 'coordenacao' };
+    const controller = createUsuarioController(() => ({
+      listar: async (filtro) => filtro,
+      criar: async (dados) => ({ id: 9, ...dados }),
+      atualizar: async (id, dados, u) => ({ id, dados, u }),
+      desativar: async (id, u) => ({ id, ativo: false, por: u.id }),
+      reativar: async (id) => ({ id, ativo: true }),
+    }));
+    const desativado = criarRespostaFake();
+    await controller.desativar({ params: { id: '9' }, usuario }, desativado);
+    assert.deepEqual(desativado.body, { id: '9', ativo: false, por: 1 });
+    const reativado = criarRespostaFake();
+    await controller.reativar({ params: { id: '9' } }, reativado);
+    assert.deepEqual(reativado.body, { id: '9', ativo: true });
     const res = criarRespostaFake();
     await controller.listar({ query: { papel: 'professor' } }, res);
     assert.deepEqual(res.body, { papel: 'professor' });
     const semQuery = criarRespostaFake();
     await controller.listar({}, semQuery);
     assert.deepEqual(semQuery.body, { papel: undefined });
+    const criado = criarRespostaFake();
+    await controller.criar({ body: { nome: 'Bia' } }, criado);
+    assert.deepEqual([criado.statusCode, criado.body], [201, { id: 9, nome: 'Bia' }]);
+    const semCorpo = criarRespostaFake();
+    await controller.criar({}, semCorpo);
+    assert.deepEqual(semCorpo.body, { id: 9 });
+    const editado = criarRespostaFake();
+    await controller.atualizar({ params: { id: '9' }, body: { nome: 'B' }, usuario }, editado);
+    assert.deepEqual(editado.body, { id: '9', dados: { nome: 'B' }, u: usuario });
+    const editadoSemCorpo = criarRespostaFake();
+    await controller.atualizar({ params: { id: '9' }, usuario }, editadoSemCorpo);
+    assert.deepEqual(editadoSemCorpo.body.dados, {});
   });
 
   it('HorarioController repassa usuário logado e responde 201/204', async () => {
     const usuario = { id: 2, papel: 'professor' };
     const chamadas = [];
-    const controller = createHorarioController({
+    const controller = createHorarioController(() => ({
       listar: async (query, u) => ({ query, u }),
       livres: async (query, u) => ({ query, u }),
       criar: async (dados, u) => ({ dados, u }),
       remover: async (id, u) => chamadas.push([id, u]),
-    });
+    }));
     const lista = criarRespostaFake();
     await controller.listar({ query: { professorId: '2' }, usuario }, lista);
     assert.deepEqual(lista.body, { query: { professorId: '2' }, u: usuario });
@@ -242,11 +396,11 @@ describe('controllers', () => {
 
   it('AulaController lista, agenda (201) e cancela', async () => {
     const usuario = { id: 1, papel: 'coordenacao' };
-    const controller = createAulaController({
+    const controller = createAulaController(() => ({
       listar: async (query, u) => ({ query, u }),
       agendar: async (dados) => [dados],
       cancelar: async (id, u) => ({ id, u, status: 'cancelada' }),
-    });
+    }));
     const lista = criarRespostaFake();
     await controller.listar({ query: { inicio: 'a' }, usuario }, lista);
     assert.deepEqual(lista.body, { query: { inicio: 'a' }, u: usuario });

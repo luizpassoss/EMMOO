@@ -10,7 +10,7 @@ export function validarPlano(input = {}) {
     erros.push({ campo: 'nome', mensagem: 'Informe o nome do plano (mínimo 2 caracteres).' });
   }
   if (!TIPOS_PLANO.includes(input.tipo)) {
-    erros.push({ campo: 'tipo', mensagem: 'O tipo deve ser "particular" ou "grupo".' });
+    erros.push({ campo: 'tipo', mensagem: 'Escolha o tipo do plano: particular ou em grupo.' });
   }
   const valor = toNumber(input.valor);
   if (!Number.isFinite(valor) || valor <= 0) {
@@ -18,11 +18,11 @@ export function validarPlano(input = {}) {
   }
   const freqSemanal = toNumber(input.freqSemanal);
   if (!Number.isInteger(freqSemanal) || freqSemanal < 1 || freqSemanal > 7) {
-    erros.push({ campo: 'freqSemanal', mensagem: 'A frequência semanal deve ser um inteiro entre 1 e 7.' });
+    erros.push({ campo: 'freqSemanal', mensagem: 'Escolha de 1 a 7 aulas por semana.' });
   }
   const duracaoMin = input.duracaoMin === undefined ? DURACAO_PADRAO_MIN : toNumber(input.duracaoMin);
   if (!Number.isInteger(duracaoMin) || duracaoMin < 15 || duracaoMin > 240) {
-    erros.push({ campo: 'duracaoMin', mensagem: 'A duração deve ser um inteiro entre 15 e 240 minutos.' });
+    erros.push({ campo: 'duracaoMin', mensagem: 'A duração da aula deve ficar entre 15 e 240 minutos.' });
   }
 
   if (erros.length > 0) return { erros, dados: null };

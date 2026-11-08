@@ -79,4 +79,40 @@ describe('cliente da API', () => {
       body: undefined,
     });
   });
+
+  it('baixa arquivo com a sessão e usa o nome indicado pela API', async () => {
+    const pdf = new Blob(['%PDF'], { type: 'application/pdf' });
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'Content-Disposition': 'attachment; filename="recibo-2026-10-ana.pdf"' }),
+      blob: async () => pdf,
+    });
+    const api = createApiClient({ getToken: () => 'tk', fetchImpl });
+    await expect(api.baixar('/mensalidades/1/recibo')).resolves.toEqual({ conteudo: pdf, arquivo: 'recibo-2026-10-ana.pdf' });
+    expect(fetchImpl).toHaveBeenCalledWith('/api/mensalidades/1/recibo', {
+      method: 'GET',
+      headers: { Accept: 'application/pdf, application/json', Authorization: 'Bearer tk' },
+      body: undefined,
+    });
+
+    fetchImpl.mockResolvedValue({ ok: true, status: 200, headers: new Headers(), blob: async () => pdf });
+    expect((await api.baixar('/relatorios/mensal/pdf')).arquivo).toBeNull(); // sem nome: a página escolhe um
+
+    // A planilha pede CSV.
+    await api.baixar('/relatorios/mensal/csv?tipo=presenca', 'text/csv, application/json');
+    expect(fetchImpl).toHaveBeenLastCalledWith('/api/relatorios/mensal/csv?tipo=presenca', {
+      method: 'GET',
+      headers: { Accept: 'text/csv, application/json', Authorization: 'Bearer tk' },
+      body: undefined,
+    });
+  });
+
+  it('erro ao baixar arquivo vira ApiError com a mensagem da API', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(respostaFake(409, { error: { message: 'O recibo fica disponível depois que o pagamento é registrado.' } }));
+    const erro = await createApiClient({ fetchImpl }).baixar('/mensalidades/1/recibo').catch((e) => e);
+    expect(erro).toBeInstanceOf(ApiError);
+    expect(erro.status).toBe(409);
+    expect(erro.message).toMatch(/recibo fica disponível/);
+  });
 });

@@ -10,7 +10,7 @@ export function createTokenService({ secret, expiresIn = '8h' }) {
       try {
         return jwt.verify(token, secret);
       } catch {
-        throw new UnauthorizedError('Token inválido ou expirado.');
+        throw new UnauthorizedError('Sessão inválida ou expirada. Entre novamente.');
       }
     },
   };

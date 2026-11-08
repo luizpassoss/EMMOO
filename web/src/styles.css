@@ -1,223 +1,1231 @@
-/* Identidade visual minimalista em tons de cinza (mesma dos mockups da RFC). Mobile-first. */
+/*
+ * Identidade visual da RFC (mockups 1–6): monocromática — grafite sobre cinzas claros levemente quentes,
+ * cartões brancos planos (só a borda, sem sombra), cantos arredondados e botões em pílula. Cor só onde há
+ * significado (erro). Minimalista: pouco texto na tela, números e ações em destaque, explicações só quando mudam a decisão.
+ * Mobile-first (RNF04): no celular, barra superior + menu inferior; no desktop, menu lateral com o usuário no rodapé.
+ *
+ * Contraste (WCAG): tinta 17,5:1 · texto 15,2:1 · suave 5,8:1 sobre branco e 5,0:1 sobre o cinza de destaque.
+ */
 :root {
-  --tinta: #1a1a1a;
-  --texto: #3a3a3a;
-  --suave: #767676;
-  --linha: #e4e4e4;
-  --fundo: #f6f6f6;
-  --cartao: #ffffff;
-  --escuro: #2b2b2b;
-  --raio: 14px;
-  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+  --fundo: #f6f6f5;
+  --superficie: #ffffff;
+  --superficie-2: #fafaf9;
+  --hover: #f1f0ee;
+  --selecionado: #e9e7e4;
+  --borda: #ebe9e6;
+  --borda-forte: #dad6d2;
+  --borda-campo: #d3cec9;
+  --texto: #292524;
+  --suave: #6b645f;
+  --apagado: #8c857f;
+  --tinta: #1c1917;
+  --escuro: #1c1917;
+  --escuro-hover: #35312d;
+  --erro: #b42318;
+  --erro-forte: #912018;
+  --erro-fundo: #fef3f2;
+  --erro-borda: #fecdca;
+  --raio-g: 22px;
+  --raio: 16px;
+  --raio-p: 12px;
+  --sombra: 0 1px 2px rgb(28 25 23 / 3%);
+  --sombra-media: 0 1px 3px rgb(28 25 23 / 5%), 0 10px 28px -10px rgb(28 25 23 / 16%);
+  --sombra-alta: 0 14px 36px -8px rgb(28 25 23 / 28%);
+  --anel: 0 0 0 3px rgb(28 25 23 / 12%);
+  --menu-inferior: 66px;
+  /* Duas fontes: Plus Jakarta Sans dá personalidade a títulos, números e botões; Inter mantém o texto e os campos legíveis. */
+  --fonte-titulo: 'Plus Jakarta Sans Variable', 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
   color: var(--texto);
   background: var(--fundo);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-* { box-sizing: border-box; }
-body { margin: 0; }
-h1, h2 { color: var(--tinta); margin: 0 0 8px; }
-h2 { font-size: 1.05rem; }
-
-.titulo { font-size: 1.5rem; }
-.texto-suave { color: var(--suave); margin: 0 0 16px; }
-
-/* ---------- Estrutura (celular: menu na base; desktop: menu lateral) ---------- */
-.app { min-height: 100vh; padding-bottom: 72px; }
-.sidebar {
-  position: fixed; inset: auto 0 0 0; z-index: 10;
-  background: var(--cartao); border-top: 1px solid var(--linha);
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; } /* o toque ganha resposta própria (:active), sem o clarão cinza */
+html { scrollbar-gutter: stable; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; } /* abrir uma janela (que trava a rolagem) não desloca a página; girar o celular não aumenta a letra */
+body { margin: 0; background: var(--fundo); }
+h1, h2, h3 { color: var(--tinta); margin: 0; line-height: 1.25; letter-spacing: -0.015em; }
+h2 { font-size: 1.05rem; font-weight: 700; }
+/* O espaço da Jakarta é estreito (0,18em contra 0,25em da Inter): sem compensar, "Agendar aula" vira "Agendaraula". */
+h1, h2, h3, .botao, .avatar, .passo-numero, .linha-fim, .valor, .card-indicador strong {
+  font-family: var(--fonte-titulo); word-spacing: 0.07em;
 }
-.sidebar .marca { display: none; }
-.menu { display: flex; justify-content: space-around; }
-.menu-item {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 10px 12px; font-size: 0.75rem; color: var(--suave); text-decoration: none;
-}
-.menu-item.ativo { color: var(--tinta); font-weight: 600; }
-/* Largura fixa: cada símbolo tem uma largura, e sem isso os rótulos do menu ficariam desalinhados. */
-.menu-icone { font-size: 1.2rem; width: 1.5rem; text-align: center; flex: none; }
+p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+svg { flex: none; }
+::placeholder { color: var(--apagado); opacity: 1; }
+::selection { background: var(--selecionado); color: var(--tinta); }
 
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+:focus-visible { outline: 2px solid var(--tinta); outline-offset: 2px; }
+.texto-suave { color: var(--suave); }
+
+/* ---------- Estrutura (celular primeiro) ---------- */
+.app { min-height: 100vh; }
+
+/* No celular, a barra respeita as áreas seguras (entalhe em cima; laterais com o celular deitado). */
 .topo {
+  position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px; background: var(--cartao); border-bottom: 1px solid var(--linha);
+  height: calc(60px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) max(10px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+  background: rgb(255 255 255 / 92%); backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--borda);
 }
-.usuario { display: flex; align-items: center; gap: 10px; }
-.usuario small { display: block; color: var(--suave); }
-.pagina { padding: 20px 16px; max-width: 980px; }
+.topo-usuario { display: flex; align-items: center; gap: 4px; }
+.topo .avatar { width: 34px; height: 34px; font-size: 0.75rem; }
+
+/* Marca: a colcheia dupla (♫) e o nome, sem caixa; embaixo, a escola em que se está. */
+.marca { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--tinta); }
+.marca-icone { display: inline-flex; color: var(--tinta); }
+.marca-texto { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.marca-texto strong { font-family: var(--fonte-titulo); font-size: 0.98rem; font-weight: 750; letter-spacing: 0.16em; }
+.marca-texto small {
+  max-width: 190px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--suave); font-size: 0.74rem; font-weight: 500; letter-spacing: 0;
+}
+@media (max-width: 380px) { .marca-texto small { max-width: 150px; } }
+
+/* Menu: no celular, barra inferior com o item ativo marcado por uma pílula atrás do ícone. */
+.sidebar {
+  position: fixed; inset: auto 0 0 0; z-index: 20;
+  background: rgb(255 255 255 / 96%); backdrop-filter: saturate(1.4) blur(10px);
+  border-top: 1px solid var(--borda);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.sidebar > .marca, .sidebar-rodape { display: none; }
+.menu {
+  display: flex; justify-content: space-around; height: var(--menu-inferior);
+  padding: 0 max(4px, env(safe-area-inset-right)) 0 max(4px, env(safe-area-inset-left));
+}
+.menu-item {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  font-size: 0.7rem; font-weight: 600; color: var(--suave); text-decoration: none;
+  transition: color 0.15s;
+}
+.menu-icone {
+  display: grid; place-items: center; width: 54px; height: 30px; border-radius: 999px;
+  transition: background 0.15s;
+}
+.menu-item:hover { color: var(--tinta); }
+.menu-item.ativo { color: var(--tinta); }
+.menu-item.ativo .menu-icone { background: var(--selecionado); }
+.menu-item.ativo svg { stroke-width: 2.1; }
+.menu-item:active .menu-icone { background: var(--hover); }
+.menu-item.ativo:active .menu-icone { background: var(--selecionado); }
+.menu-rotulo { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* "Mais" (só no celular, quando o perfil tem mais páginas do que cabem na barra): abre a lista das outras. */
+.menu-mais-botao { border: 0; background: none; font: inherit; font-size: 0.7rem; cursor: pointer; touch-action: manipulation; }
+.menu-extra { display: none; }
+.menu-mais {
+  position: fixed; z-index: 25; right: 8px; bottom: calc(var(--menu-inferior) + 8px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 2px; min-width: 220px; padding: 6px;
+  border-radius: var(--raio); background: var(--superficie); border: 1px solid var(--borda); box-shadow: var(--sombra-alta);
+  animation: janela-entrada 0.18s cubic-bezier(0.2, 0.8, 0.2, 1); transform-origin: bottom right;
+}
+.menu-mais-item {
+  display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 12px 0 6px; border-radius: var(--raio-p);
+  color: var(--tinta); font-weight: 600; font-size: 0.95rem; text-decoration: none; transition: background 0.15s;
+}
+.menu-mais-item .indicador-icone { width: 36px; height: 36px; }
+.menu-mais-item:hover, .menu-mais-item:active { background: var(--hover); }
+.menu-mais-item.ativo { background: var(--selecionado); }
+.menu-mais-item.ativo .indicador-icone { background: var(--superficie); }
+
+.pagina {
+  width: 100%; max-width: 1080px; margin: 0 auto;
+  padding: 22px max(16px, env(safe-area-inset-right)) calc(var(--menu-inferior) + 32px + env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+}
 
 @media (min-width: 768px) {
-  .app { display: flex; padding-bottom: 0; }
+  .app { display: grid; grid-template-columns: 248px minmax(0, 1fr); }
+  .topo { display: none; }
   .sidebar {
-    position: sticky; top: 0; inset: auto; width: 220px; height: 100vh;
-    border-top: 0; border-right: 1px solid var(--linha); padding: 20px 12px;
+    /* "inset" vem antes de "top": o contrário zeraria o top e o menu deixaria de ficar fixo ao rolar. */
+    position: sticky; inset: auto; top: 0; align-self: start; height: 100vh;
+    display: flex; flex-direction: column; gap: 28px;
+    padding: 26px 16px 18px; border-top: 0; border-right: 1px solid var(--borda);
+    background: var(--superficie); backdrop-filter: none;
   }
-  .sidebar .marca { display: flex; margin: 0 8px 28px; }
-  .menu { flex-direction: column; gap: 4px; }
-  .menu-item { flex-direction: row; gap: 12px; font-size: 0.95rem; border-radius: 10px; padding: 10px 12px; }
-  .menu-item.ativo { background: #efefef; }
-  .conteudo { flex: 1; }
-  .pagina { padding: 28px 32px; }
+  .sidebar > .marca { display: flex; padding: 0 10px; }
+  .sidebar .marca-icone svg { width: 26px; height: 26px; }
+  .menu { flex-direction: column; justify-content: flex-start; gap: 2px; height: auto; padding: 0; }
+  .menu-item {
+    flex: none; flex-direction: row; justify-content: flex-start; gap: 12px;
+    height: 44px; padding: 0 12px; border-radius: var(--raio-p);
+    font-size: 0.94rem; font-weight: 500; color: var(--texto);
+    transition: background 0.15s, color 0.15s;
+  }
+  .menu-icone { width: auto; height: auto; background: none; border-radius: 0; }
+  .menu-item.ativo .menu-icone { background: none; }
+  .menu-item:hover { background: var(--hover); color: var(--tinta); }
+  .menu-item.ativo { background: var(--selecionado); color: var(--tinta); font-weight: 600; }
+  .menu-extra { display: flex; } /* no computador, o menu lateral tem todas as páginas */
+  .menu-mais-botao, .menu-mais { display: none; }
+  .sidebar-rodape {
+    margin-top: auto; display: flex; align-items: center; gap: 10px;
+    padding: 14px 2px 0 6px; border-top: 1px solid var(--borda);
+  }
+  .sidebar-usuario { flex: 1; min-width: 0; line-height: 1.3; }
+  .sidebar-usuario strong, .sidebar-usuario small {
+    display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .sidebar-usuario strong { color: var(--tinta); font-size: 0.9rem; font-weight: 600; }
+  .sidebar-usuario small { color: var(--suave); font-size: 0.78rem; }
+  .pagina { padding: 40px 48px 56px; }
 }
 
-/* ---------- Componentes ---------- */
-.marca { display: flex; align-items: center; gap: 8px; }
-.marca-icone { font-size: 1.4rem; color: var(--tinta); }
-.marca h1 { margin: 0; font-size: 1.8rem; }
+/* ---------- Cabeçalho das páginas ---------- */
+/* Título e ações na mesma linha quando cabem; senão, as ações descem, compactas (não ocupam a largura toda). */
+.cabecalho-pagina {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 12px 16px; margin-bottom: 20px;
+}
+.titulo { font-size: 1.6rem; font-weight: 750; letter-spacing: -0.03em; }
+/* "Voltar" (só nas subpáginas) acima do título; a margem negativa alinha a seta com o texto do título. */
+.voltar {
+  display: flex; height: 32px; margin: 0 0 6px -10px; padding: 0 12px 0 6px; gap: 2px;
+  color: var(--suave); font-weight: 550;
+}
+.voltar:hover:not(:disabled) { color: var(--tinta); }
+.descricao { margin-top: 2px; color: var(--suave); font-size: 0.95rem; }
+.cabecalho-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+@media (max-width: 767px) {
+  .titulo { font-size: 1.4rem; }
+  .cabecalho-pagina { margin-bottom: 16px; }
+  .cabecalho-acoes .botao { height: 40px; padding: 0 16px; font-size: 0.9rem; }
+}
+
+/* ---------- Superfícies ---------- */
+.card {
+  background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio);
+  padding: 18px; margin-bottom: 12px;
+}
+
+/* Lista em cartão: cada item é uma linha; a linha inteira é tocável quando abre os detalhes. */
+.card-lista { padding: 0; overflow: hidden; }
+.card-lista .lista > li + li { border-top: 1px solid var(--borda); }
+.linha {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 11px 18px;
+  border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
+}
+button.linha { cursor: pointer; transition: background 0.15s; }
+button.linha:hover, a.linha:hover { background: var(--superficie-2); }
+button.linha:hover .linha-seta, a.linha:hover .linha-seta { color: var(--suave); transform: translateX(2px); }
+button.linha:focus-visible, a.linha:focus-visible { outline: 2px solid var(--tinta); outline-offset: -2px; }
+button.linha:active, a.linha:active { background: var(--hover); } /* resposta ao toque no celular (lá não há hover) */
+a.linha { text-decoration: none; transition: background 0.15s; }
+.primeiros-passos { margin-bottom: 16px; }
+.primeiros-passos > h2 { padding: 18px 20px 8px; font-size: 1rem; }
+.primeiros-passos .lista > li { border-top: 1px solid var(--borda); }
+.passo-numero {
+  display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--hover); color: var(--tinta); font-size: 0.85rem; font-weight: 650; font-variant-numeric: tabular-nums;
+}
+.linha-texto { flex: 1; min-width: 0; }
+.linha-texto strong, .linha-texto small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.linha-texto strong { color: var(--tinta); font-weight: 600; }
+/* Nas listas, nome e detalhe usam até duas linhas antes das reticências: no celular, "Particular · 2 aulas por
+   semana" ou um nome completo longo aparecem inteiros, sem virar "Particular · 2 aulas…". */
+.linha .linha-texto strong, .linha .linha-texto small, .proxima-aula .linha-texto strong {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  white-space: normal; overflow-wrap: anywhere;
+}
+.linha-texto small { margin-top: 1px; color: var(--suave); font-size: 0.85rem; }
+.linha-fim { flex: none; color: var(--tinta); font-weight: 650; font-variant-numeric: tabular-nums; }
+.linha-seta { flex: none; color: #b7b1ab; transition: transform 0.15s, color 0.15s; }
+.linha-inativa .linha-texto strong { color: var(--suave); font-weight: 500; } /* acesso desativado: continua na lista, apagado */
+.linha-inativa .avatar { opacity: 0.6; }
+.card-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.secao-titulo { margin-bottom: 6px; }
 
 .avatar {
   display: inline-grid; place-items: center; flex: none;
-  width: 36px; height: 36px; border-radius: 50%;
-  background: #f0f0f0; border: 1px solid var(--linha);
-  color: var(--suave); font-weight: 700; font-size: 0.85rem;
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--hover); color: #57534e;
+  font-weight: 650; font-size: 0.8rem; letter-spacing: 0.02em;
 }
-
-.card {
-  background: var(--cartao); border: 1px solid var(--linha); border-radius: var(--raio);
-  padding: 18px; margin-bottom: 18px; box-shadow: 0 2px 0 #ececec;
-}
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-bottom: 18px; }
-.card-indicador {
-  background: #efefef; border-radius: var(--raio); padding: 16px;
-  display: flex; flex-direction: column; justify-content: space-between; gap: 6px; /* números alinhados pela base */
-}
-.card-indicador span { color: var(--suave); font-size: 0.9rem; }
-.card-indicador strong { color: var(--tinta); font-size: 1.8rem; }
 
 .lista { list-style: none; margin: 0; padding: 0; }
 .lista-item {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 12px 0; border-bottom: 1px solid var(--linha);
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 12px 0; border-bottom: 1px solid var(--borda);
 }
-.lista-item:last-child { border-bottom: 0; }
-.lista-item > div, .lista-texto { flex: 1; min-width: 160px; }
-.lista-item small { display: block; color: var(--suave); }
-.valor { font-weight: 700; color: var(--tinta); }
+.lista-item:last-child { border-bottom: 0; padding-bottom: 2px; }
+.lista-item:first-child { padding-top: 2px; }
+.lista-texto { flex: 1; min-width: 150px; }
+.lista-texto strong { display: block; color: var(--tinta); font-weight: 600; }
+.lista-texto small, .lista-item small { display: block; color: var(--suave); font-size: 0.85rem; }
+.lista-item > .acoes { display: flex; align-items: center; gap: 4px; }
+.lista-item > .indicador-icone { width: 36px; height: 36px; flex: none; }
+.valor { font-weight: 700; color: var(--tinta); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lista-item .valor small { display: inline; font-weight: 500; }
 
-.pill { border-radius: 999px; padding: 3px 12px; font-size: 0.75rem; font-weight: 700; }
-.pill-ativo { background: #ececec; color: var(--tinta); }
-.pill-inativo { background: var(--escuro); color: #fff; }
+.pill {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px;
+  font-size: 0.74rem; font-weight: 650; white-space: nowrap; background: var(--hover); color: var(--tinta);
+}
+.pill-inativo, .pill-realizada { background: var(--escuro); color: #fff; }
+.pill-falta { background: transparent; box-shadow: inset 0 0 0 1px var(--tinta); }
+.pill-cancelada { background: transparent; color: var(--suave); box-shadow: inset 0 0 0 1px var(--borda-forte); }
+/* Reposição: tracejado, como um horário "a mais" na agenda. */
+.pill-reposicao { background: transparent; box-shadow: none; border: 1px dashed var(--borda-campo); color: var(--texto); }
+/* Mensalidades: paga em grafite (concluída); atrasada é o único caso em que a cor aparece — pede ação. */
+.pill-paga { background: var(--escuro); color: #fff; }
+.pill-atrasada { background: var(--erro-fundo); color: var(--erro-forte); box-shadow: inset 0 0 0 1px var(--erro-borda); }
+
+/* ---------- Botões ---------- */
+.botao {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; padding: 0 20px; border-radius: 999px; border: 1px solid transparent;
+  font-weight: 600; font-size: 0.95rem; letter-spacing: -0.005em; cursor: pointer; white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, transform 0.1s;
+  touch-action: manipulation;
+}
+.botao:active:not(:disabled) { transform: scale(0.98); } /* o botão "afunda" no toque */
+a.botao { text-decoration: none; } /* link com cara de botão (ex.: "Editar cadastro", "Ver histórico") */
+/* Nota de contexto solta na página (ex.: contato no histórico): o mesmo respiro dos cartões. */
+.pagina > section > .informacao { margin-bottom: 16px; }
+@media (min-width: 768px) {
+  /* Cinco indicadores (histórico do aluno) cabem numa linha no computador. */
+  .cards.cards-cinco { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+}
+.botao:disabled { opacity: 0.55; cursor: progress; }
+.botao-primario { background: var(--escuro); color: #fff; }
+.botao-primario:hover:not(:disabled) { background: var(--escuro-hover); }
+.botao-secundario { background: var(--superficie); border-color: var(--borda-forte); color: var(--tinta); }
+.botao-secundario:hover:not(:disabled) { background: var(--superficie-2); border-color: var(--borda-campo); }
+.botao-fantasma { background: transparent; color: var(--texto); height: 36px; padding: 0 12px; font-size: 0.9rem; font-weight: 550; }
+.botao-fantasma:hover:not(:disabled) { background: var(--hover); color: var(--tinta); }
+.botao-link {
+  display: inline-flex; align-items: center;
+  background: none; border: 0; padding: 0; height: auto; color: var(--tinta);
+  font-weight: 600; font-size: 0.9rem; text-decoration: underline; text-decoration-color: var(--borda-campo);
+  text-underline-offset: 4px; cursor: pointer; transition: text-decoration-color 0.15s;
+}
+.botao-link:hover { text-decoration-color: var(--tinta); }
+.botao-icone {
+  display: inline-grid; place-items: center; flex: none;
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid transparent;
+  background: transparent; color: var(--texto); cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.botao-icone:hover { background: var(--hover); color: var(--tinta); }
+.botao-icone.contorno { border-color: var(--borda-forte); background: var(--superficie); }
+.botao-icone.contorno:hover { background: var(--superficie-2); }
+.botao-icone:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
+.botao-icone:disabled:hover { background: var(--superficie); color: var(--texto); }
+.botoes { display: flex; flex-wrap: wrap; gap: 10px; }
 
 /* ---------- Formulários ---------- */
-.formulario { display: flex; flex-direction: column; gap: 12px; }
-.grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
-.campo { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; color: var(--texto); }
-.campo input, .campo select {
-  font: inherit; padding: 10px 12px; border-radius: 10px; height: 44px; /* select, date e number com a mesma altura */
-  border: 1px solid #d6d6d6; background: #fafafa; color: var(--tinta);
-}
-.campo input:focus, .campo select:focus { outline: 2px solid var(--tinta); outline-offset: 1px; }
-.campo [aria-invalid='true'] { border-color: #b00020; }
-.erro-campo { color: #b00020; }
-
-.botao {
-  font: inherit; font-weight: 700; cursor: pointer; border-radius: 999px;
-  padding: 10px 20px; border: 1px solid transparent;
-}
-.botao:disabled { opacity: 0.6; cursor: wait; }
-.botao-primario { background: var(--escuro); color: #fff; }
-.botao-secundario { background: #fff; color: var(--texto); border-color: #d6d6d6; }
-.botao-link { background: none; border: 0; padding: 4px 0; color: var(--suave); text-decoration: underline; }
-
-.alerta {
-  background: #f0f0f0; border: 1px solid #cfcfcf; border-left: 4px solid var(--escuro);
-  border-radius: 10px; padding: 10px 12px; color: var(--tinta);
-}
-
-/* ---------- Login ---------- */
-.login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
-.login-card {
-  width: 100%; max-width: 380px; background: var(--cartao);
-  border: 1px solid var(--linha); border-radius: 18px; padding: 32px 28px;
-  display: flex; flex-direction: column; gap: 14px; box-shadow: 0 3px 0 #ececec;
-}
-.login-card .marca, .login-card .texto-suave { justify-content: center; text-align: center; margin: 0; }
-
-/* ---------- Feedback, filtros e ações ---------- */
-.aviso {
-  background: #f7f7f7; border: 1px solid var(--linha); border-left: 4px solid var(--suave);
-  border-radius: 10px; padding: 10px 12px; color: var(--tinta);
-}
-.aviso::before { content: '✓ '; font-weight: 700; }
-
-.cabecalho-pagina {
-  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px;
-}
-.card-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-.card-cabecalho h2 { margin: 0; }
-.filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 14px; }
-.filtros .texto-suave { margin: 0; }
-.campo-inline { flex-direction: row; align-items: center; gap: 8px; }
-.busca {
-  flex: 1; min-width: 200px; font: inherit; padding: 9px 14px; border-radius: 999px;
-  border: 1px solid #d6d6d6; background: #fafafa; color: var(--tinta);
-}
-
-.segmentos { display: inline-flex; border: 1px solid #d6d6d6; border-radius: 999px; padding: 3px; background: #fafafa; }
-.segmento {
-  font: inherit; font-size: 0.9rem; border: 0; background: transparent; color: var(--texto);
-  border-radius: 999px; padding: 6px 14px; cursor: pointer;
-}
-.segmento small { opacity: 0.7; }
-.segmento.ativo { background: var(--escuro); color: #fff; }
-
-.lista-item > .acoes { display: flex; gap: 14px; flex: none; min-width: 0; }
-.botoes { display: flex; flex-wrap: wrap; gap: 10px; }
-.botao-icone { width: 38px; height: 38px; padding: 0; font-size: 1.3rem; line-height: 1; }
-.formulario-secao { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--linha); }
-
-.botao:focus-visible, .segmento:focus-visible, .chip-botao:focus-visible, .chip-remover:focus-visible, .busca:focus-visible {
-  outline: 2px solid var(--tinta); outline-offset: 2px;
-}
-
-/* ---------- Chips (horários e vagas) ---------- */
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip {
-  display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 0.85rem; font-weight: 600;
-  padding: 4px 10px; border-radius: 999px; border: 1px solid var(--linha); background: #f4f4f4; color: var(--tinta);
-}
-.chip small { color: var(--suave); font-weight: 400; }
-.chip-remover { border: 0; background: none; color: var(--suave); cursor: pointer; font-size: 1rem; padding: 0 2px; line-height: 1; }
-.chip-remover:hover { color: var(--tinta); }
-.chip-botao { cursor: pointer; }
-.chip-botao.ativo { background: var(--escuro); border-color: var(--escuro); color: #fff; }
-.horarios-dia { min-width: 72px; }
-.vagas {
-  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
-  border: 1px dashed #d0d0d0; border-radius: 10px; background: #fafafa;
-}
-.vagas .texto-suave { margin: 0; }
-
-/* ---------- Agenda semanal ---------- */
-.navegacao-semana { display: flex; align-items: center; gap: 8px; }
-.navegacao-semana strong { min-width: 150px; text-align: center; color: var(--tinta); }
-.semana { display: grid; gap: 12px; margin-bottom: 18px; transition: opacity 0.15s; }
-.semana[aria-busy='true'] { opacity: 0.6; }
-.dia { margin: 0; padding: 14px 16px; }
-.dia-hoje { border-color: var(--tinta); }
-.dia-titulo { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
-.dia-vazio { margin: 0; font-size: 0.9rem; }
-.dia-sem-aulas { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.dia-sem-aulas .dia-titulo { margin: 0; }
-.aula-hora { display: flex; flex-direction: column; min-width: 48px; font-weight: 700; color: var(--tinta); }
-.aula-hora small { font-weight: 400; }
-.aula-cancelada .lista-texto strong { text-decoration: line-through; color: var(--suave); }
-
-.pill-agendada { background: #ececec; color: var(--tinta); }
-.pill-realizada { background: var(--escuro); color: #fff; }
-.pill-falta { background: #fff; color: var(--tinta); border: 1px solid var(--tinta); }
-.pill-cancelada { background: #fff; color: var(--suave); border: 1px dashed #bdbdbd; }
-.pill-hoje { background: var(--escuro); color: #fff; font-size: 0.7rem; padding: 2px 8px; }
-
+.formulario { display: flex; flex-direction: column; gap: 14px; }
+/* Campos lado a lado quando cabem (dois por linha na janela do computador); um embaixo do outro no celular.
+   Alinhados pelo topo: uma dica ou um erro sob um campo não desloca o vizinho. */
+.grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; align-items: start; }
+/* Três campos curtos (data, horário, semanas): três colunas; no celular, a data inteira e os outros dois lado a lado. */
+.grade-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Plano e responsável: o nome do plano ("Particular · 2 aulas por semana") é longo e ganha mais espaço. */
+.grade-plano { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
 @media (max-width: 767px) {
-  .navegacao-semana { width: 100%; justify-content: space-between; }
-  /* Itens com ações viram grade: as ações descem para uma segunda linha alinhada ao texto, não à margem. */
-  .lista-item:has(> .acoes) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 12px; row-gap: 4px; }
-  .lista-item:has(> .acoes) > .lista-texto { min-width: 0; }
-  .lista-item > .acoes { grid-column: 2 / -1; }
-  .card-indicador { padding: 12px; }
-  .card-indicador strong { font-size: 1.5rem; }
+  .grade-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grade-3 > :first-child { grid-column: 1 / -1; }
+  .grade-plano { grid-template-columns: minmax(0, 1fr); }
+}
+/* Rótulo discreto (peso médio, tom do texto) sobre o campo: o que se digita é o que chama a atenção. */
+.campo {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  font-size: 0.85rem; line-height: 1.45; font-weight: 550; color: var(--texto);
+}
+.campo input:where(:not([type='radio'], [type='checkbox'])), .campo select {
+  width: 100%; height: 46px; padding: 0 14px; border-radius: var(--raio-p);
+  border: 1px solid var(--borda-campo); background: var(--superficie); color: var(--tinta);
+  font-size: 1rem; font-weight: 450; line-height: normal;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+/* (:where não soma especificidade: o recuo dos campos com ícone e da senha continua valendo.) */
+/* Seletores com a mesma seta em qualquer navegador. */
+.campo select, .seletor {
+  appearance: none; cursor: pointer; padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b645f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6.5 9.5 5.5 5.5 5.5-5.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+}
+/* Texto livre (diário da aula): mesma caixa dos campos, crescendo para baixo. */
+.campo textarea {
+  width: 100%; min-height: 104px; padding: 12px 14px; border-radius: var(--raio-p); resize: vertical;
+  border: 1px solid var(--borda-campo); background: var(--superficie); color: var(--tinta);
+  font-size: 1rem; font-weight: 450; line-height: 1.5; transition: border-color 0.15s, box-shadow 0.15s;
+}
+.campo input:where(:not([type='radio'], [type='checkbox'])):hover, .campo select:hover, .campo textarea:hover { border-color: #b9b3ad; }
+.campo input:where(:not([type='radio'], [type='checkbox'])):focus, .campo select:focus, .campo textarea:focus { outline: none; border-color: var(--tinta); box-shadow: var(--anel); }
+.campo [aria-invalid='true'] { border-color: var(--erro); }
+.campo [aria-invalid='true']:focus { box-shadow: 0 0 0 3px rgb(180 35 24 / 15%); }
+.erro-campo { color: var(--erro); font-size: 0.82rem; font-weight: 550; line-height: 1.4; }
+/* Dica do campo: o que preencher ou o efeito da escolha, em tom mais leve que o rótulo. */
+.dica-campo { color: var(--apagado); font-size: 0.8rem; font-weight: 450; line-height: 1.4; }
+.campo-inline { flex-direction: row; align-items: center; gap: 10px; }
+.campo .campo-inline select, .campo-inline select { min-width: 160px; height: 40px; } /* mesma altura dos botões da barra */
+/* Campo com ícone à esquerda (login). */
+.campo-icone { position: relative; display: block; }
+.campo-icone > svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--apagado); pointer-events: none; }
+.campo-icone input { padding-left: 44px; }
+.campo-icone:focus-within > svg { color: var(--tinta); }
+/* Informação de contexto no formulário (ex.: o plano do aluno tem duas aulas por semana). */
+.informacao {
+  display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: var(--raio-p);
+  background: var(--superficie-2); color: var(--suave); font-size: 0.86rem; line-height: 1.45;
+}
+.informacao::before {
+  content: 'i'; display: grid; place-items: center; flex: none; width: 17px; height: 17px; margin-top: 2px;
+  border-radius: 50%; background: var(--selecionado); color: var(--tinta); font-family: var(--fonte-titulo); font-size: 0.66rem; font-weight: 700;
 }
 @media (min-width: 768px) {
-  .formulario > .botao { align-self: flex-start; } /* no celular o botão ocupa a largura toda */
-  .cards { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .formulario > .botao, .formulario > .botoes { align-self: flex-start; }
+}
+
+/* ---------- Janela de formulário (cadastro e edição) ----------
+   No computador, centralizada sobre a página; no celular, uma folha que sobe de baixo.
+   Cabeçalho e rodapé ficam parados e só o conteúdo rola: "Salvar" está sempre à vista. */
+.painel-fundo {
+  position: fixed; inset: 0; z-index: 55;
+  background: rgb(28 25 23 / 45%); animation: fundo-entrada 0.2s ease-out;
+}
+.painel {
+  position: fixed; inset: 0; z-index: 60; margin: auto;
+  display: flex; flex-direction: column;
+  width: min(600px, calc(100vw - 48px)); height: fit-content;
+  max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px);
+  border-radius: var(--raio-g); background: var(--superficie); box-shadow: var(--sombra-alta);
+  animation: janela-entrada 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.painel:focus { outline: none; } /* recebe o foco ao abrir pelo toque; o anel fica para os campos */
+.painel-cabecalho {
+  flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 22px 18px 0 26px;
+}
+.painel-titulo { min-width: 0; padding-top: 6px; }
+.painel-titulo h2 { font-size: 1.15rem; font-weight: 750; letter-spacing: -0.02em; }
+.painel-titulo p { margin-top: 4px; color: var(--suave); font-size: 0.92rem; line-height: 1.45; }
+.painel-corpo {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 16px; padding: 20px 26px 26px;
+}
+.painel-corpo .alerta { margin-bottom: 0; }
+/* Conteúdo longo rola dentro da folha: nenhum bloco encolhe para caber (o seletor de ano dos feriados sumia). */
+.painel-corpo > * { flex-shrink: 0; }
+.painel-corpo > .segmentos { align-self: flex-start; }
+.painel-rodape {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 26px; border-top: 1px solid var(--borda); background: var(--superficie);
+  border-radius: 0 0 var(--raio-g) var(--raio-g);
+}
+/* Ações secundárias (inativar, excluir) discretas à esquerda; "Cancelar" e a ação principal à direita. */
+.painel-outras { display: flex; flex-wrap: wrap; gap: 4px; margin-left: -12px; }
+.painel-acoes { display: flex; gap: 10px; margin-left: auto; }
+@keyframes janela-entrada { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+@keyframes painel-subida { from { transform: translateY(32px); opacity: 0; } }
+@keyframes fundo-entrada { from { opacity: 0; } }
+@media (max-width: 767px) {
+  .painel {
+    inset: auto 0 0 0; margin: 0; width: auto; height: auto;
+    max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px);
+    border-radius: 22px 22px 0 0; box-shadow: 0 -10px 36px -10px rgb(28 25 23 / 30%);
+    animation: painel-subida 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  /* Alça no topo: mostra que é uma folha — arrastar o cabeçalho para baixo fecha (o toque passa pela alça). */
+  .painel::before {
+    content: ''; position: absolute; top: 8px; left: 50%; width: 40px; height: 4px; margin-left: -20px;
+    border-radius: 2px; background: var(--borda-forte); pointer-events: none;
+  }
+  .painel-cabecalho { padding: 22px 10px 0 18px; touch-action: none; user-select: none; }
+  .painel-corpo { padding: 18px 18px 22px; }
+  /* A ação principal em cima, larga e perto do polegar; as secundárias embaixo, centralizadas. */
+  .painel-rodape {
+    flex-direction: column-reverse; align-items: stretch; gap: 4px; border-radius: 0; background: var(--superficie);
+    padding: 12px 18px calc(10px + env(safe-area-inset-bottom));
+  }
+  .painel-acoes { margin: 0; }
+  .painel-acoes .botao-primario, .painel-acoes .botao-perigo-cheio { flex: 1; height: 48px; }
+  .painel-cancelar { display: none; } /* no celular, o X, tocar fora e o voltar já fecham */
+  .painel-outras { justify-content: center; margin: 0; }
+  /* Com a folha aberta, o aviso aparece no alto (embaixo, cobriria o botão de salvar). */
+  .com-painel .aviso { top: 12px; bottom: auto; }
+}
+
+/* ---------- Feedback ---------- */
+.alerta {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: var(--erro-fundo); border: 1px solid var(--erro-borda);
+  border-radius: var(--raio-p); padding: 12px 14px; margin-bottom: 16px;
+  color: var(--erro-forte); font-size: 0.92rem; font-weight: 500;
+}
+.alerta::before {
+  content: '!'; display: grid; place-items: center; flex: none; width: 20px; height: 20px; margin-top: 1px;
+  border-radius: 50%; background: var(--erro); color: #fff; font-size: 0.75rem; font-weight: 700;
+}
+.formulario .alerta, .login-card .alerta { margin-bottom: 0; }
+
+.aviso {
+  position: fixed; z-index: 70; /* acima da folha do celular e do diálogo */ left: 50%; bottom: calc(var(--menu-inferior) + 16px + env(safe-area-inset-bottom));
+  transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px);
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 18px 11px 12px; border-radius: 14px; background: var(--escuro); color: #fff;
+  font-size: 0.92rem; font-weight: 500; box-shadow: var(--sombra-alta);
+  animation: aviso-entrada 0.2s ease-out;
+}
+.aviso::before {
+  content: '✓'; display: grid; place-items: center; flex: none; width: 22px; height: 22px;
+  border-radius: 50%; background: rgb(255 255 255 / 16%); font-size: 0.75rem; font-weight: 700;
+}
+/* Barra de tempo: encolhe nos 5 s em que o aviso fica na tela. */
+.aviso::after {
+  content: ''; position: absolute; left: 14px; right: 14px; bottom: 4px; height: 2px; border-radius: 1px;
+  background: rgb(255 255 255 / 28%); transform-origin: left center; animation: aviso-tempo 5s linear forwards;
+}
+@media (min-width: 768px) { .aviso { bottom: 24px; left: calc(50% + 124px); } }
+@keyframes aviso-entrada { from { opacity: 0; transform: translate(-50%, 8px); } }
+@keyframes aviso-tempo { to { transform: scaleX(0); } }
+
+.vazio { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 12px; text-align: center; }
+.vazio-icone {
+  display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 4px;
+  border-radius: 50%; background: var(--hover); color: var(--suave);
+}
+.vazio strong { color: var(--tinta); font-weight: 600; }
+.vazio p { color: var(--suave); font-size: 0.92rem; max-width: 340px; }
+
+.esqueleto { display: flex; flex-direction: column; gap: 14px; padding: 4px 0; }
+.esqueleto-linha {
+  height: 14px; border-radius: 7px; background: linear-gradient(90deg, #efeeec 25%, #f7f6f5 50%, #efeeec 75%);
+  background-size: 200% 100%; animation: esqueleto 1.2s ease-in-out infinite;
+}
+.esqueleto-linha:nth-child(3n + 2) { width: 85%; }
+.esqueleto-linha:nth-child(3n + 3) { width: 60%; }
+@keyframes esqueleto { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+/* ---------- Movimento: entradas curtas e discretas, que não atrapalham a leitura ---------- */
+@keyframes entrada { from { opacity: 0; transform: translateY(6px); } }
+@keyframes entrada-item { from { opacity: 0; transform: translateY(4px); } }
+@keyframes entra-proxima { from { opacity: 0; transform: translateX(18px); } }
+@keyframes entra-anterior { from { opacity: 0; transform: translateX(-18px); } }
+/* A página chega em cascata curta: cabeçalho, filtros, conteúdo. */
+.pagina > section > :not(.painel, .painel-fundo, .aviso, .confirmacao-fundo) { animation: entrada 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+.pagina > section > :not(.painel, .painel-fundo, .aviso, .confirmacao-fundo):nth-child(2) { animation-delay: 40ms; }
+.pagina > section > :not(.painel, .painel-fundo, .aviso, .confirmacao-fundo):nth-child(3) { animation-delay: 80ms; }
+.pagina > section > :not(.painel, .painel-fundo, .aviso, .confirmacao-fundo):nth-child(n + 4) { animation-delay: 120ms; }
+.login > * { animation: entrada 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+.login > :nth-child(2) { animation-delay: 80ms; }
+/* Itens de lista chegam um depois do outro (só ao aparecer: recarregar a lista não repete). */
+.card-lista .lista > li, .proxima-aula { animation: entrada-item 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+.card-lista .lista > li:nth-child(2), .proxima-aula:nth-child(2) { animation-delay: 30ms; }
+.card-lista .lista > li:nth-child(3), .proxima-aula:nth-child(3) { animation-delay: 60ms; }
+.card-lista .lista > li:nth-child(4), .proxima-aula:nth-child(4) { animation-delay: 90ms; }
+.card-lista .lista > li:nth-child(5), .proxima-aula:nth-child(5) { animation-delay: 120ms; }
+.card-lista .lista > li:nth-child(6), .proxima-aula:nth-child(6) { animation-delay: 150ms; }
+.card-lista .lista > li:nth-child(7), .proxima-aula:nth-child(7) { animation-delay: 180ms; }
+.card-lista .lista > li:nth-child(8), .proxima-aula:nth-child(8) { animation-delay: 210ms; }
+.card-lista .lista > li:nth-child(n + 9) { animation-delay: 240ms; }
+.aula { animation: entrada-item 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+/* Agenda: a nova janela entra deslizando do lado para onde se andou. */
+.entra-proxima { animation: entra-proxima 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.entra-anterior { animation: entra-anterior 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .aviso::after { display: none; } /* parada, a barra de tempo não diria nada */
+}
+
+/* ---------- Filtros e busca ---------- */
+.filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
+.filtros .texto-suave { font-size: 0.9rem; }
+.segmentos {
+  display: inline-flex; padding: 4px; gap: 2px; border-radius: 999px;
+  background: var(--superficie); border: 1px solid var(--borda);
+}
+.segmento {
+  height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent;
+  font-size: 0.88rem; font-weight: 550; color: var(--texto); cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.segmento:hover { background: var(--hover); }
+.segmento small { margin-left: 3px; color: var(--suave); font-weight: 500; font-variant-numeric: tabular-nums; }
+.segmento.ativo { background: var(--escuro); color: #fff; }
+.segmento.ativo small { color: #d6d3d1; }
+.busca { position: relative; flex: 1; min-width: 220px; }
+.busca svg { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--apagado); pointer-events: none; }
+.busca input {
+  width: 100%; height: 44px; padding: 0 16px 0 42px; border-radius: 999px;
+  border: 1px solid var(--borda); background: var(--superficie); color: var(--tinta); font-size: 0.95rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.busca input:hover { border-color: var(--borda-campo); }
+.busca input:focus { outline: none; border-color: var(--tinta); box-shadow: var(--anel); }
+.busca:focus-within svg { color: var(--tinta); }
+
+/* ---------- Início ---------- */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 12px; }
+/* Indicador minimalista: o rótulo pequeno em cima, o número embaixo e, se houver, um detalhe curto. */
+.card-indicador {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  padding: 14px 16px; border-radius: var(--raio-p); background: var(--superficie); border: 1px solid var(--borda);
+}
+.indicador-rotulo { display: flex; align-items: center; gap: 6px; color: var(--suave); font-size: 0.8rem; font-weight: 550; }
+.card-indicador strong {
+  color: var(--tinta); font-size: 1.75rem; font-weight: 700; line-height: 1.2; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.card-indicador.compacto strong { font-size: 1.45rem; } /* valores em reais: cabe "R$ 12.345,00" */
+.indicador-detalhe { color: var(--apagado); font-size: 0.78rem; font-weight: 500; }
+/* Pede ação (aulas a registrar, mensalidades em atraso): um ponto antes do rótulo. */
+.card-indicador.atencao .indicador-rotulo::before {
+  content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--tinta);
+}
+/* Cartão que leva à página do assunto: a borda escurece ao passar o mouse. */
+.card-indicador-link { color: inherit; text-decoration: none; transition: border-color 0.15s, background 0.15s, transform 0.15s; }
+.card-indicador-link:hover { border-color: var(--borda-forte); }
+.card-indicador-link:active { transform: scale(0.99); }
+.card-indicador-link:focus-visible { outline: 2px solid var(--tinta); outline-offset: 2px; }
+/* No celular, duas colunas e números menores; com número ímpar de cartões, o último ocupa a linha inteira. */
+@media (max-width: 767px) {
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .cards > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .card-indicador { padding: 12px 14px; }
+  .card-indicador strong { font-size: 1.4rem; }
+  .card-indicador.compacto strong { font-size: 1.2rem; }
+  /* Histórico do aluno: os quatro números numa faixa só (presença, presenças, faltas, reposições). */
+  .cards.cards-cinco { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cards-cinco > .card-indicador:nth-child(-n + 4) { align-items: center; padding: 10px 6px; text-align: center; }
+  .cards-cinco > .card-indicador:nth-child(-n + 4) .indicador-detalhe { display: none; }
+  .cards-cinco > .card-indicador:nth-child(-n + 4) strong { font-size: 1.15rem; }
+  .cards-cinco > .card-indicador:nth-child(-n + 4) .indicador-rotulo { font-size: 0.72rem; }
+  .cards-cinco > .card-indicador:nth-child(5) { grid-column: 1 / -1; }
+}
+/* Ícone num círculo (portal do responsável, faixa de alertas, menu "Mais"). */
+.indicador-icone {
+  display: grid; place-items: center; width: 40px; height: 40px; flex: none;
+  border-radius: 50%; background: var(--hover); color: var(--tinta);
+}
+.indicador-icone.atencao { background: var(--erro-fundo); color: var(--erro); }
+/* Próximas aulas: avatar, aluno e dia; o horário à direita. */
+.proxima-aula { display: flex; align-items: center; gap: 14px; padding: 12px 0; }
+.proxima-aula + .proxima-aula { border-top: 1px solid var(--borda); }
+.proxima-aula:last-child { padding-bottom: 0; }
+/* Linha tocável dentro de um cartão (abre a aula): ocupa a largura toda; o realce vai até a borda do texto. */
+.proxima-aula:has(> .linha-botao) { padding: 4px 0; }
+.linha-botao {
+  display: flex; align-items: center; gap: 14px; width: calc(100% + 16px); min-height: 56px; margin: 0 -8px; padding: 8px;
+  border: 0; border-radius: var(--raio-p); background: transparent; color: inherit; font: inherit; text-align: left;
+  cursor: pointer; touch-action: manipulation; transition: background 0.15s;
+}
+.linha-botao:hover { background: var(--superficie-2); }
+.linha-botao:active { background: var(--hover); }
+.linha-botao:focus-visible { outline: 2px solid var(--tinta); outline-offset: -2px; }
+.linha-botao .linha-texto small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; }
+.linha-do-tempo > li + li { border-top: 1px solid var(--borda); }
+.linha-do-tempo > li { padding: 4px 0; }
+.ver-todas { margin-top: 12px; }
+
+/* Portal do responsável: um cartão por dependente, com o que fazer agora (avisar falta, repor, pagar). */
+.dependente { padding: 0; overflow: hidden; }
+.dependente-cabecalho { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--borda); }
+.dependente-cabecalho h2 { font-size: 1.05rem; }
+.dependente-itens > li { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 20px; }
+.dependente-itens > li + li { border-top: 1px solid var(--borda); }
+.dependente-itens .indicador-icone { width: 38px; height: 38px; }
+.dependente-itens .linha-texto { min-width: 160px; }
+.dependente-itens .linha-texto small { margin: 0 0 1px; }
+.dependente-itens .linha-texto strong { white-space: normal; }
+.dependente-itens li.atencao .indicador-icone { background: var(--erro-fundo); color: var(--erro); }
+@media (max-width: 767px) {
+  .dependente-cabecalho { padding: 16px; }
+  .dependente-itens > li { padding: 14px 16px; }
+  /* O botão da ação desce para a linha de baixo, largo, alinhado ao texto. */
+  .dependente-itens .botao { flex: 1 1 100%; margin-left: 52px; }
+}
+
+/* Alertas de pagamento (RF12) no alto das mensalidades. */
+.faixa-alertas { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.faixa-texto { flex: 1; min-width: 200px; }
+.faixa-texto strong { display: block; color: var(--tinta); font-weight: 650; }
+.faixa-texto p { color: var(--suave); font-size: 0.9rem; }
+.faixa-texto strong + p { margin-top: 2px; }
+
+/* Valor e situação no fim da linha (mensalidades): o valor em cima, o selo embaixo. */
+.linha-valor { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+
+/* Tabelas do relatório: no celular, rolam de lado dentro do cartão (a página não). */
+.tabela-rolagem { overflow-x: auto; margin: 0 -20px; padding: 0 20px; }
+.tabela { width: 100%; border-collapse: collapse; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+.tabela th, .tabela td { padding: 10px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--borda); }
+.tabela thead th { color: var(--suave); font-size: 0.74rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; }
+.tabela tbody th { color: var(--tinta); font-weight: 600; }
+.tabela tbody tr:last-child > * { border-bottom: 0; }
+.tabela .numero { text-align: right; }
+.tabela th:first-child, .tabela td:first-child { padding-left: 0; }
+.tabela th:last-child, .tabela td:last-child { padding-right: 0; }
+.nota-rodape { margin-top: 14px; color: var(--apagado); font-size: 0.82rem; }
+/* No celular, cada linha da tabela vira um bloco: o aluno em cima e os valores embaixo, cada um com o nome da
+   coluna (data-rotulo) — nada fica escondido à direita. O cabeçalho continua lá para leitores de tela. */
+@media (max-width: 767px) {
+  .tabela-rolagem { overflow: visible; margin: 0; padding: 0; }
+  .tabela thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .tabela, .tabela tbody { display: block; width: 100%; }
+  .tabela tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; padding: 14px 0; border-bottom: 1px solid var(--borda); }
+  .tabela-presenca tr { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tabela tbody tr:last-child { border-bottom: 0; padding-bottom: 0; }
+  .tabela tbody tr:first-child { padding-top: 4px; }
+  .tabela th, .tabela td, .tabela th:first-child, .tabela td:first-child, .tabela th:last-child, .tabela td:last-child {
+    display: block; padding: 0; border: 0; white-space: normal; text-align: left;
+  }
+  .tabela tbody th { grid-column: 1 / -1; font-size: 0.98rem; }
+  .tabela .numero { text-align: left; }
+  .tabela td::before { content: attr(data-rotulo); display: block; margin-bottom: 2px; color: var(--suave); font-size: 0.74rem; font-weight: 600; }
+}
+
+/* ---------- Agenda ---------- */
+.navegacao-semana { display: flex; align-items: center; gap: 8px; }
+.navegacao-semana strong {
+  min-width: 150px; text-align: center; color: var(--tinta);
+  font-size: 0.95rem; font-weight: 650; font-variant-numeric: tabular-nums;
+}
+@media (max-width: 767px) {
+  .navegacao-semana { width: 100%; justify-content: space-between; }
+}
+
+/* A janela num cartão: no celular, a faixa de dias em cima e a lista embaixo; em telas largas, colunas. */
+.calendario { padding: 0; overflow: hidden; }
+.calendario[aria-busy='true'] .semana { opacity: 0.55; }
+.tira-dias {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px;
+  padding: 10px 8px; border-bottom: 1px solid var(--borda); background: var(--superficie-2);
+}
+.tira-dia {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0 5px;
+  border: 0; border-radius: 14px; background: transparent; color: var(--tinta); cursor: pointer;
+  touch-action: manipulation; transition: background 0.15s;
+}
+.tira-dia:hover, .tira-dia:active { background: var(--hover); }
+.tira-nome { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--suave); }
+.tira-numero {
+  display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+  font-family: var(--fonte-titulo); font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.tira-dia.hoje .tira-nome { color: var(--tinta); }
+.tira-dia.hoje .tira-numero { background: var(--escuro); color: #fff; box-shadow: 0 2px 6px rgb(28 25 23 / 22%); }
+/* Ponto cheio = tem aula; anel = feriado ou recesso. */
+.tira-marca { width: 5px; height: 5px; border-radius: 50%; }
+.tira-dia.com-aula .tira-marca { background: var(--tinta); }
+.tira-dia.feriado .tira-marca { box-shadow: inset 0 0 0 1.25px var(--suave); }
+.tira-dia.feriado:not(.hoje) .tira-numero { color: var(--apagado); }
+
+.semana { padding: 4px 20px; transition: opacity 0.15s; }
+.dia {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 14px; padding: 14px 0;
+  border-bottom: 1px solid var(--borda); scroll-margin-top: 76px; /* a faixa de dias rola até aqui sem esconder sob a barra */
+}
+.dia:last-child { border-bottom: 0; }
+.dia-titulo {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; align-self: start;
+  width: 52px; height: 56px; border-radius: 14px; background: var(--superficie-2); border: 1px solid var(--borda);
+  font-size: 1rem;
+}
+.dia-titulo:focus { outline: none; } /* recebe o foco pela faixa de dias; o anel só aparece pelo teclado */
+.dia-titulo:focus-visible { outline: 2px solid var(--tinta); outline-offset: 2px; }
+.dia-nome { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--suave); }
+.dia-numero {
+  font-family: var(--fonte-titulo); font-size: 1.3rem; font-weight: 750; line-height: 1.15;
+  color: var(--tinta); font-variant-numeric: tabular-nums;
+}
+/* Dia sem aula: mais baixo e sem caixa, para os dias com aula saltarem aos olhos. */
+.dia-livre { padding: 8px 0; }
+.dia-livre:not(.dia-hoje) .dia-titulo { height: 48px; background: transparent; border-color: transparent; }
+.dia-livre:not(.dia-hoje) .dia-numero { color: var(--texto); font-weight: 650; }
+.dia-hoje .dia-titulo { background: var(--escuro); border-color: var(--escuro); box-shadow: 0 2px 6px rgb(28 25 23 / 18%); }
+.dia-hoje .dia-nome { color: #d6d3d1; }
+.dia-hoje .dia-numero { color: #fff; }
+.dia-conteudo { align-self: center; min-width: 0; }
+.dia-vazio { color: var(--apagado); font-size: 0.9rem; }
+/* Dia sem aula: "Sem aulas" e, para a coordenação, o atalho para agendar naquele dia (tracejado: um espaço a preencher). */
+.dia-vazio-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dia-agendar {
+  display: inline-flex; align-items: center; gap: 4px; flex: none; height: 32px; padding: 0 12px 0 9px;
+  border: 1px dashed var(--borda-forte); border-radius: 999px; background: transparent; color: var(--suave);
+  font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; touch-action: manipulation;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.dia-agendar:hover, .dia-agendar:active { border-style: solid; border-color: var(--borda-campo); background: var(--hover); color: var(--tinta); }
+/* Feriado ou recesso: o dia diz por que não tem aula. */
+.dia-feriado {
+  display: inline-flex; margin: 0; padding: 6px 12px; border-radius: 999px;
+  background: var(--hover); color: var(--tinta); font-size: 0.875rem; font-weight: 550;
+}
+.dia-feriado + .lista { margin-top: 8px; }
+.lista-item.feriado { flex-wrap: nowrap; }
+/* Cada aula num bloco branco: hora, aluno e, quando cabe, o ícone de cancelar. */
+.aula {
+  position: relative; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 6px 8px 20px;
+  border-radius: 14px; background: var(--superficie); border: 1px solid var(--borda);
+}
+/* A barra na lateral faz o bloco ler como compromisso; apagada quando a aula já tem desfecho (falta, realizada). */
+.aula::before {
+  content: ''; position: absolute; left: 8px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px;
+  background: var(--escuro);
+}
+.aula:not(.aula-agendada)::before { background: var(--borda-forte); }
+.aula + .aula { margin-top: 8px; }
+/* Celular estreito ou coluna do desktop: o nome quebra linha em vez de virar "Pedro Hen…". */
+.aula .linha-texto strong, .aula .linha-texto small { white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.aula-hora {
+  flex: none; min-width: 46px; font-family: var(--fonte-titulo); font-weight: 750;
+  color: var(--tinta); font-variant-numeric: tabular-nums;
+}
+.aula-cancelada .linha-texto strong { text-decoration: line-through; color: var(--suave); }
+/* A aula inteira abre os detalhes: hora, aluno e selos são um botão; o "cancelar" fica ao lado. */
+.aula-abrir {
+  display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; align-self: stretch;
+  margin: -8px 0 -8px -14px; padding: 8px 0 8px 14px; border: 0; border-radius: 12px;
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; touch-action: manipulation;
+}
+.aula:has(.aula-abrir:hover) { border-color: var(--borda-forte); }
+.aula-abrir:active { background: var(--superficie-2); }
+.aula-abrir:focus-visible { outline: 2px solid var(--tinta); outline-offset: -2px; }
+.aula-abrir .pill { flex: none; }
+.botao-icone.discreto { width: 36px; height: 36px; color: var(--suave); }
+.botao-icone.discreto:hover { color: var(--tinta); background: var(--hover); }
+/* Seletor compacto da barra da agenda: a primeira opção ("Todos os professores") já explica o filtro. */
+.seletor {
+  height: 40px; padding-left: 16px; border-radius: 999px; border: 1px solid var(--borda);
+  background-color: var(--superficie); color: var(--tinta); font-size: 0.9rem; font-weight: 500;
+}
+.seletor:hover { border-color: var(--borda-campo); }
+.seletor:focus { outline: none; border-color: var(--tinta); box-shadow: var(--anel); }
+@media (min-width: 768px) { .filtros .seletor { margin-left: auto; } }
+
+/* Telas largas: a semana em colunas, um dia por coluna (como o mockup 3 da RFC). No celular e no tablet, a lista. */
+@media (min-width: 768px) { .dia { scroll-margin-top: 16px; } } /* sem a barra superior do celular */
+@media (min-width: 1100px) {
+  .tira-dias { display: none; } /* as colunas já mostram a janela inteira */
+  .semana { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 0; }
+  .dia, .dia-livre {
+    display: flex; flex-direction: column; gap: 14px; min-height: 340px;
+    padding: 18px 10px 20px; border-bottom: 0; border-left: 1px solid var(--borda);
+  }
+  .dia:first-child { border-left: 0; }
+  .dia-hoje { background: var(--superficie-2); } /* a coluna de hoje, levemente destacada */
+  /* Cabeçalho da coluna: o dia da semana em cima e o número embaixo — num círculo escuro quando é hoje. */
+  .dia-titulo, .dia-hoje .dia-titulo, .dia-livre:not(.dia-hoje) .dia-titulo {
+    gap: 4px; align-self: stretch; width: auto; height: auto; padding: 0;
+    background: none; border: 0; border-radius: 0; box-shadow: none;
+  }
+  .dia-nome, .dia-hoje .dia-nome { font-size: 0.68rem; color: var(--suave); }
+  .dia-hoje .dia-nome { color: var(--tinta); }
+  .dia-numero, .dia-livre:not(.dia-hoje) .dia-numero {
+    display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%;
+    font-size: 1.2rem; font-weight: 750; color: var(--tinta);
+  }
+  .dia-hoje .dia-numero { background: var(--escuro); color: #fff; box-shadow: 0 2px 6px rgb(28 25 23 / 22%); }
+  .dia-conteudo { align-self: stretch; }
+  .dia-vazio { font-size: 0.85rem; text-align: center; }
+  .dia-vazio-linha { flex-direction: column; gap: 10px; }
+  /* Com mouse, o atalho aparece ao passar sobre a coluna (ou no foco do teclado): as colunas vazias ficam limpas. */
+  @media (hover: hover) {
+    .dia-agendar { opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s; }
+    .dia:hover .dia-agendar, .dia-agendar:focus-visible { opacity: 1; }
+  }
+  .dia-feriado { display: block; border-radius: 10px; text-align: center; }
+  /* A aula vira um bloco em pé: hora em cima, aluno e detalhe embaixo; o "cancelar" no canto. */
+  .aula { flex-direction: column; align-items: stretch; gap: 2px; min-height: 0; padding: 10px 10px 10px 18px; }
+  .aula::before { left: 7px; }
+  .aula-hora { min-width: 0; font-size: 0.85rem; }
+  .aula:has(.botao-icone) .aula-hora { padding-right: 30px; } /* só a linha da hora divide espaço com o "cancelar" */
+  .aula .pill { align-self: flex-start; margin-top: 4px; }
+  .aula-abrir { flex-direction: column; align-items: stretch; gap: 2px; margin: -10px -10px -10px -18px; padding: 10px 10px 10px 18px; }
+  .aula .botao-icone.discreto { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; }
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 6px 0 12px;
+  border-radius: 999px; border: 1px solid var(--borda); background: var(--superficie);
+  font-size: 0.88rem; font-weight: 600; color: var(--tinta); font-variant-numeric: tabular-nums;
+}
+.chip small { color: var(--suave); font-weight: 500; font-size: 0.78rem; }
+.chip-remover {
+  display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--suave); cursor: pointer;
+}
+.chip-remover:hover { background: var(--hover); color: var(--tinta); }
+.chip-botao { padding: 0 14px; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.chip-botao:hover { background: var(--hover); border-color: var(--borda-forte); }
+.chip-botao.ativo { background: var(--escuro); border-color: var(--escuro); color: #fff; }
+.horarios-dia { min-width: 80px; font-weight: 600; color: var(--tinta); }
+.vagas {
+  display: flex; flex-direction: column; gap: 12px; padding: 14px 16px;
+  border-radius: var(--raio-p); background: var(--superficie-2); border: 1px dashed var(--borda-forte);
+}
+.vagas > strong { color: var(--tinta); font-size: 0.875rem; font-weight: 600; }
+.vagas > span { color: var(--suave); font-size: 0.9rem; }
+/* Reposição: os horários livres no prazo, um dia por linha. */
+.vagas-reposicao { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+.vagas-dia { display: grid; grid-template-columns: 128px minmax(0, 1fr); align-items: center; gap: 8px 12px; }
+.vagas-dia-nome { color: var(--tinta); font-size: 0.875rem; font-weight: 600; }
+.vagas-reposicao .botao-link { align-self: flex-start; }
+.chip-botao:has(input:focus-visible) { outline: 2px solid var(--tinta); outline-offset: 2px; }
+@media (max-width: 767px) { .vagas-dia { grid-template-columns: minmax(0, 1fr); gap: 6px; } }
+
+/* Detalhes de um registro (aula, mensalidade): rótulo pequeno em cima, valor embaixo, em duas colunas. */
+.detalhes {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; margin: 0;
+  padding: 14px 16px; border-radius: var(--raio-p); background: var(--superficie-2);
+}
+.detalhes dt { color: var(--suave); font-size: 0.78rem; font-weight: 550; }
+.detalhes dd { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0; color: var(--tinta); font-weight: 550; overflow-wrap: anywhere; }
+/* Texto escrito por alguém (diário, plano da aula anterior): preserva as quebras de linha. */
+.bloco { display: flex; flex-direction: column; gap: 6px; }
+.bloco h3 { color: var(--suave); font-size: 0.78rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; }
+.bloco h3 + .texto-livre + h3 { margin-top: 8px; }
+.texto-livre {
+  white-space: pre-wrap; overflow-wrap: anywhere; color: var(--texto);
+  padding-left: 12px; border-left: 3px solid var(--borda-forte);
+}
+.painel-link { align-self: flex-start; }
+
+/* Título de uma lista em cartão (ex.: "Em aberto", "Outubro de 2026" com o total à direita). */
+.card-lista-titulo {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin: 0; padding: 18px 20px 10px; font-size: 1rem;
+}
+.card-lista-titulo h2 { font-size: 1rem; }
+.card-lista-titulo .texto-suave { font-weight: 600; font-variant-numeric: tabular-nums; }
+.card-lista-titulo + .lista > li:first-child { border-top: 1px solid var(--borda); }
+.card-lista > .vazio { padding: 16px 12px 26px; }
+@media (max-width: 767px) { .card-lista-titulo { padding: 16px 16px 10px; } }
+
+/* Grade de atendimento do professor: os dias da semana em botões que ligam e desligam. */
+.grade-horarios { display: flex; flex-direction: column; gap: 16px; }
+.dias-semana { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.dia-semana {
+  display: grid; place-items: center; height: 42px; border-radius: 10px; border: 1px solid var(--borda-campo);
+  background: var(--superficie); color: var(--texto); font-size: 0.84rem; font-weight: 600; cursor: pointer;
+  touch-action: manipulation; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.dia-semana:hover { background: var(--hover); }
+.dia-semana.ativo { background: var(--escuro); border-color: var(--escuro); color: #fff; }
+.dia-semana:has(input:focus-visible) { outline: 2px solid var(--tinta); outline-offset: 2px; }
+.grade-resumo { margin-top: -4px; }
+/* Das · Até · Cada aula: três campos curtos, sempre na mesma linha (também no celular). */
+.grade-horas { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 10px; }
+.grade-horas input[type='time'] { padding: 0 10px; }
+.grade-horas select { padding-left: 12px; padding-right: 32px; background-position: right 10px center; }
+.resumo-horarios { display: flex; flex-direction: column; gap: 2px; }
+.resumo-horarios strong { color: var(--tinta); font-weight: 600; }
+.resumo-horarios small { color: var(--suave); font-size: 0.88rem; }
+.botao-compacto { height: 40px; padding: 0 16px; font-size: 0.9rem; }
+.horarios-professor { gap: 12px; }
+.horarios-professor > .botoes { margin-top: 2px; }
+@media (max-width: 380px) { .dias-semana { gap: 4px; } .dia-semana { font-size: 0.78rem; } }
+@media (hover: none) {
+  .dia-semana:not(.ativo):hover:not(:active) { background: var(--superficie); }
+}
+.formulario-secao { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--borda); }
+/* Nos cartões de configuração (horários, feriados), a lista vazia é compacta: o formulário logo abaixo é o próximo passo. */
+.formulario-secao > .vazio { padding: 12px 8px 6px; }
+.formulario-secao > .vazio .vazio-icone { width: 40px; height: 40px; }
+/* Alinha pelo topo: uma mensagem de erro sob um campo não desloca os vizinhos. */
+.formulario-linha { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; align-items: start; }
+/* O botão desce a altura de um rótulo (0,875rem × 1,45 + 6px de espaço) para ficar na linha dos campos. */
+.formulario-linha .botao { height: 46px; margin-top: calc(0.875rem * 1.45 + 6px); } /* mesma altura dos campos */
+@media (max-width: 767px) {
+  /* Primeiro campo inteiro (nome, dia); os dois seguintes lado a lado; o botão na linha de baixo. */
+  .formulario-linha > .campo:first-child { grid-column: 1 / -1; }
+  .formulario-linha .botao { grid-column: 1 / -1; margin-top: 0; }
+}
+
+/* ---------- Login e cadastro de escola ---------- */
+.login {
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 20px; padding: 28px 16px;
+  background: radial-gradient(circle at 50% 0%, #ffffff 0, var(--fundo) 60%);
+}
+.login-card {
+  width: 100%; max-width: 400px; background: var(--superficie);
+  border: 1px solid var(--borda); border-radius: var(--raio-g); padding: 40px 32px 32px;
+  display: flex; flex-direction: column; gap: 18px; box-shadow: var(--sombra-media);
+}
+@media (max-width: 420px) { .login-card { padding: 32px 22px 26px; } }
+.login-marca { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 8px; text-align: center; }
+.login-marca h1 { font-size: 1.5rem; font-weight: 750; letter-spacing: 0.18em; margin-right: -0.18em; } /* compensa o espaço da última letra */
+.login-slogan { margin-top: -6px; color: var(--suave); font-size: 0.92rem; }
+.campo-senha { position: relative; }
+.campo-senha input { width: 100%; padding-right: 48px; }
+.campo-senha .botao-icone { position: absolute; right: 2px; top: 2px; }
+.login-card .botao-primario { width: 100%; height: 48px; margin-top: 4px; font-size: 1rem; }
+/* Escola já conhecida: uma linha discreta no lugar do campo, com "Trocar". */
+.login-escola {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; border-radius: var(--raio-p); background: var(--superficie-2); border: 1px solid var(--borda);
+}
+.login-escola > span { display: flex; align-items: center; gap: 12px; min-width: 0; line-height: 1.3; }
+.login-escola > span > span:not(.indicador-icone) { display: flex; flex-direction: column; min-width: 0; }
+.login-escola .indicador-icone { width: 36px; height: 36px; background: var(--superficie); border: 1px solid var(--borda); }
+.login-escola small { color: var(--suave); font-size: 0.76rem; font-weight: 500; }
+.login-escola strong { color: var(--tinta); font-size: 0.95rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.login-rodape { margin: 0; color: var(--suave); font-size: 0.9rem; text-align: center; }
+.login-rodape a {
+  display: inline-flex; align-items: center; min-height: 40px; color: var(--tinta); font-weight: 600;
+  text-decoration-color: var(--borda-campo); text-underline-offset: 4px;
+}
+.login-rodape a:hover { text-decoration-color: var(--tinta); }
+.login-card h2 { font-size: 0.75rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--suave); margin-top: 6px; }
+.login-card .dica { margin-top: -8px; }
+.login-card .login-aviso { margin: 0; text-align: center; }
+.login-card .vazio { padding: 8px 0; }
+
+/* ---------- Ações destrutivas, opções e dicas ---------- */
+.botao-perigo { color: var(--erro); }
+.botao-perigo:hover:not(:disabled) { background: var(--erro-fundo); color: var(--erro-forte); }
+.botao-perigo-cheio { background: var(--erro); color: #fff; box-shadow: 0 1px 2px rgb(145 32 24 / 25%); }
+.botao-perigo-cheio:hover:not(:disabled) { background: var(--erro-forte); }
+
+/* Confirmação: no centro, no computador; no celular, sobe de baixo como a folha dos formulários.
+   O ícone diz o peso da decisão: exclamação em vermelho para o que apaga ou tira acesso, interrogação nas demais. */
+.confirmacao-fundo {
+  position: fixed; inset: 0; z-index: 65; display: grid; place-items: center; padding: 16px;
+  background: rgb(28 25 23 / 45%); animation: fundo-entrada 0.18s ease-out;
+}
+.confirmacao {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 16px;
+  width: 100%; max-width: 440px; padding: 24px; border-radius: var(--raio-g);
+  background: var(--superficie); box-shadow: var(--sombra-alta);
+  animation: janela-entrada 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.confirmacao-icone {
+  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--hover); color: var(--tinta);
+}
+.confirmacao-icone.perigo { background: var(--erro-fundo); color: var(--erro); }
+.confirmacao-texto { min-width: 0; padding-top: 2px; }
+.confirmacao h2 { font-size: 1.12rem; font-weight: 750; }
+.confirmacao p { margin-top: 6px; color: var(--suave); font-size: 0.95rem; }
+.confirmacao-acoes { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+@media (max-width: 767px) {
+  .confirmacao-fundo { place-items: end stretch; padding: 0; }
+  .confirmacao {
+    grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center;
+    max-width: none; border-radius: 22px 22px 0 0; padding: 26px 18px calc(18px + env(safe-area-inset-bottom));
+    animation: painel-subida 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .confirmacao-icone { margin-bottom: 14px; }
+  /* A ação fica embaixo (perto do polegar) e os dois botões ocupam a largura toda. */
+  .confirmacao-acoes { justify-self: stretch; flex-direction: column-reverse; gap: 8px; }
+  .confirmacao-acoes .botao { width: 100%; height: 48px; }
+}
+
+fieldset.campo { border: 0; margin: 0; padding: 0; min-width: 0; }
+fieldset.campo legend { padding: 0; margin-bottom: 6px; }
+/* Rádios com visual de botões segmentados: as opções dividem a largura por igual e têm a altura dos campos (46px). */
+.opcoes {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; padding: 4px;
+  border-radius: var(--raio-p); background: var(--superficie-2); border: 1px solid var(--borda);
+}
+.opcao {
+  display: grid; place-items: center; min-width: 0; height: 36px; padding: 0 8px; border-radius: 9px;
+  font-size: 0.92rem; font-weight: 600; color: var(--texto); white-space: nowrap; cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.opcao:hover { background: var(--hover); }
+.opcao.ativo { background: var(--escuro); color: #fff; box-shadow: 0 1px 2px rgb(28 25 23 / 20%); } /* a escolha salta aos olhos */
+.opcao:has(input:focus-visible) { outline: 2px solid var(--tinta); outline-offset: 1px; }
+fieldset:disabled .opcao { cursor: not-allowed; }
+fieldset:disabled .opcao:not(.ativo) { color: #a8a29e; }
+fieldset:disabled .opcao:hover:not(.ativo) { background: transparent; }
+@media (max-width: 380px) { .opcao { padding: 0 4px; font-size: 0.88rem; } } /* "Coordenação" cabe em telas de 360px */
+.dica { margin-top: -6px; font-size: 0.86rem; color: var(--suave); }
+
+/* ---------- Celular: alvos de toque com pelo menos 40px (no desktop o visual continua compacto) ---------- */
+@media (max-width: 767px) {
+  /* 16 px nos campos: com menos, o iPhone dá zoom na página ao tocar no campo. */
+  .busca input, .seletor { font-size: 16px; }
+  /* Filtros em segmentos: ocupam a largura e dividem o espaço; se ainda assim não couberem (ex.: quatro situações
+     de mensalidade em 360px), rolam de lado, sem quebrar a página. */
+  .segmentos { display: flex; width: 100%; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .segmentos::-webkit-scrollbar { display: none; }
+  .segmento { flex: 1 0 auto; padding: 0 10px; }
+  .filtros .seletor { width: 100%; } /* o seletor (professor, situação) desce para a linha de baixo, inteiro */
+  /* A lista em cartão e o calendário continuam sem recuo: as linhas e a faixa de dias vão de borda a borda. */
+  .card:not(.card-lista, .calendario) { padding: 18px; }
+  .semana { padding: 2px 14px; }
+  .tira-dias { padding: 8px 6px; }
+  .linha { padding: 12px 16px; }
+  .dia { grid-template-columns: 48px minmax(0, 1fr); gap: 12px; }
+  .dia-titulo { width: 48px; height: 52px; border-radius: 13px; }
+  .botao-fantasma, .segmento, .voltar { height: 40px; }
+  .botao-link { min-height: 40px; }
+  .chip { height: 40px; padding-right: 2px; }
+  .chip-remover { width: 36px; height: 36px; }
+  .botao-icone.discreto { width: 40px; height: 40px; }
+  .dia-agendar { height: 36px; }
+  /* Menu inferior: a pílula do item tocado cresce a partir do centro. */
+  .menu-item.ativo .menu-icone { animation: pilula 0.26s cubic-bezier(0.2, 0.8, 0.2, 1); }
+}
+@media (max-width: 380px) {
+  .segmento { padding: 0 8px; font-size: 0.84rem; }
+  .card-indicador strong { font-size: 1.45rem; }
+  .card-indicador:not(.compacto) .indicador-icone { width: 38px; height: 38px; }
+}
+@keyframes pilula { from { transform: scaleX(0.55); opacity: 0.4; } }
+
+/* ---------- Toque (celular e tablet): sem o realce de "mouse por cima" que gruda depois do toque ----------
+   Sem mouse, o navegador mantém o :hover no último elemento tocado — a linha ou o botão ficavam acinzentados
+   depois de fechar a janela. Aqui o realce volta ao normal; a resposta ao toque continua no :active. */
+@media (hover: none) {
+  .menu-item:not(.ativo):hover:not(:active) { color: var(--suave); background: transparent; }
+  .menu-mais-item:not(.ativo):hover:not(:active) { background: transparent; }
+  .voltar:hover:not(:disabled):not(:active) { color: var(--suave); }
+  button.linha:hover:not(:active), a.linha:hover:not(:active), .linha-botao:hover:not(:active) { background: transparent; }
+  button.linha:hover .linha-seta, a.linha:hover .linha-seta { color: #b7b1ab; transform: none; }
+  .botao-primario:hover:not(:disabled):not(:active) { background: var(--escuro); }
+  .botao-secundario:hover:not(:disabled):not(:active) { background: var(--superficie); border-color: var(--borda-forte); }
+  .botao-fantasma:hover:not(:disabled):not(:active) { background: transparent; color: var(--texto); }
+  .botao-fantasma.botao-perigo:hover:not(:disabled):not(:active) { color: var(--erro); }
+  .botao-perigo-cheio:hover:not(:disabled):not(:active) { background: var(--erro); }
+  .botao-icone:hover:not(:active) { background: transparent; color: var(--texto); }
+  .botao-icone.contorno:hover:not(:active) { background: var(--superficie); }
+  .botao-icone.discreto:hover:not(:active) { background: transparent; color: var(--suave); }
+  .segmento:not(.ativo):hover:not(:active) { background: transparent; }
+  .opcao:not(.ativo):hover:not(:active) { background: transparent; }
+  .chip-botao:not(.ativo):hover:not(:active) { background: var(--superficie); border-color: var(--borda); }
+  .chip-remover:hover:not(:active) { background: transparent; color: var(--suave); }
+  .tira-dia:hover:not(:active) { background: transparent; }
+  .dia-agendar:hover:not(:active) { border-style: dashed; border-color: var(--borda-forte); background: transparent; color: var(--suave); }
+  .aula:has(.aula-abrir:hover) { border-color: var(--borda); }
+  .card-indicador-link:hover:not(:active) { border-color: var(--borda); box-shadow: var(--sombra); }
+  /* Resposta ao toque nos cartões que levam a outra página (no lugar do realce do mouse). */
+  .card-indicador-link:active { background: var(--superficie-2); }
+}
+
+/* ---------- Conta, senha, Pix da escola, ajustes de cobrança e feriados nacionais ---------- */
+/* As iniciais (celular) e o nome (menu lateral) levam a "Minha conta". */
+a.avatar-link { text-decoration: none; transition: background 0.15s, box-shadow 0.15s; }
+a.avatar-link:hover { background: var(--selecionado); }
+a.avatar-link:focus-visible { outline: none; box-shadow: var(--anel); }
+.sidebar-conta {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; margin: -6px 0 -6px -6px; padding: 6px;
+  border-radius: var(--raio-p); color: inherit; text-decoration: none; transition: background 0.15s;
+}
+.sidebar-conta:hover { background: var(--hover); }
+.sidebar-conta:focus-visible { outline: none; box-shadow: var(--anel); }
+
+.conta { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 14px 16px; }
+.conta > .detalhes, .conta > .dica-campo { grid-column: 1 / -1; }
+.conta .linha-texto strong { display: block; color: var(--tinta); font-size: 1.05rem; font-weight: 650; }
+.conta .linha-texto small { display: block; color: var(--suave); font-size: 0.88rem; }
+.conta .linha-texto strong, .conta .linha-texto small { white-space: normal; overflow: visible; text-overflow: clip; }
+.avatar-grande { width: 52px; height: 52px; font-size: 1rem; }
+.conta-detalhes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.conta-sair { margin-top: 4px; }
+.marcar { display: inline-flex; align-items: center; gap: 8px; color: var(--texto); font-size: 0.92rem; cursor: pointer; }
+.marcar input { width: 18px; height: 18px; accent-color: var(--escuro); }
+
+/* Login: "Esqueci minha senha" à direita, logo abaixo da senha; as telas de senha têm título comum (sem espaçamento da marca). */
+.login-esqueci { display: flex; justify-content: flex-end; margin-top: -8px; }
+.login-esqueci .botao-link { font-size: 0.88rem; }
+.login-marca h1.login-titulo { font-size: 1.3rem; letter-spacing: normal; margin-right: 0; }
+.login-card > .botao-primario { text-decoration: none; }
+
+/* Confirmação com caixa de seleção (ex.: cancelar também as mensalidades em aberto). */
+.confirmacao-opcao {
+  display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; padding: 12px 14px; border-radius: var(--raio-p);
+  background: var(--superficie-2); border: 1px solid var(--borda); color: var(--texto); font-size: 0.93rem;
+  text-align: left; cursor: pointer;
+}
+.confirmacao-opcao input { flex: none; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--escuro); }
+.confirmacao-opcao small { display: block; margin-top: 2px; color: var(--suave); font-size: 0.84rem; }
+
+/* Pix: o QR (fundo branco, para a câmera ler) ao lado do "copia e cola"; no celular, um embaixo do outro. */
+.pix { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; }
+.pix-qr {
+  width: 208px; height: 208px; padding: 8px; border-radius: var(--raio-p); background: #fff;
+  border: 1px solid var(--borda); image-rendering: pixelated;
+}
+.pix-copia { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pix-rotulo { color: var(--tinta); font-size: 0.875rem; font-weight: 600; }
+.pix-codigo {
+  width: 100%; min-height: 92px; padding: 10px 12px; resize: none; border-radius: var(--raio-p);
+  border: 1px solid var(--borda-campo); background: var(--superficie-2); color: var(--texto);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.78rem; line-height: 1.45;
+  word-break: break-all;
+}
+.pix-codigo:focus { outline: none; border-color: var(--tinta); box-shadow: var(--anel); }
+.pix-copia .botao { align-self: flex-start; }
+.pix-exemplo { display: flex; flex-direction: column; gap: 14px; }
+@media (max-width: 600px) {
+  .pix { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  .pix-copia { width: 100%; }
+  .pix-copia .botao { align-self: stretch; height: 46px; }
+}
+
+/* Valor ajustado (desconto, bolsa) e cobrança cancelada. */
+.valor-original { margin-left: 8px; color: var(--apagado); font-size: 0.85rem; font-weight: 500; }
+.detalhes .detalhe-nota { color: var(--suave); font-size: 0.85rem; font-weight: 500; }
+.detalhes .detalhe-largo { grid-column: 1 / -1; }
+.riscado { text-decoration: line-through; color: var(--apagado); }
+.valor-ajustado { display: block; color: var(--suave); font-size: 0.78rem; font-weight: 500; }
+
+/* Início: alunos para agendar (fim da série de aulas). */
+.linha-acao { flex: none; color: var(--tinta); font-size: 0.88rem; font-weight: 600; }
+.avatar-atencao { background: var(--erro-fundo); color: var(--erro-forte); }
+.card-lista-rodape { margin: 0; padding: 12px 20px 16px; border-top: 1px solid var(--borda); color: var(--suave); font-size: 0.86rem; }
+
+/* Feriados nacionais: uma lista para marcar. */
+.lista-marcavel > li + li { border-top: 1px solid var(--borda); }
+.marcavel { display: flex; align-items: center; gap: 12px; padding: 12px 2px; cursor: pointer; }
+.marcavel input { flex: none; width: 20px; height: 20px; accent-color: var(--escuro); }
+.marcavel .linha-texto strong { display: block; color: var(--tinta); font-weight: 600; }
+.marcavel .linha-texto small { display: block; color: var(--suave); font-size: 0.85rem; }
+.marcavel.desabilitado { cursor: default; opacity: 0.6; }
+.card-cabecalho .secao-titulo { margin-bottom: 0; }
+
+@media (max-width: 767px) {
+  .conta-detalhes { grid-template-columns: minmax(0, 1fr); }
+  .conta-sair { width: 100%; height: 48px; }
+  .linha-acao { display: none; } /* no celular, a seta já diz que a linha abre o agendamento */
+}
+@media (hover: none) {
+  a.avatar-link:hover:not(:active) { background: var(--hover); }
+  .sidebar-conta:hover:not(:active) { background: transparent; }
+}
+
+/* ---------- Seções recolhíveis (feriados e horários no fim da agenda) ---------- */
+/* O título é o botão: tocar abre e fecha; ao lado, um resumo curto ("4 próximos") e a seta que gira. */
+.secao-titulo:has(.secao-alternar) { flex: 1; min-width: 0; margin: 0; }
+.secao-alternar {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 32px; padding: 0;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.secao-alternar small { margin-left: auto; color: var(--suave); font-family: inherit; font-size: 0.85rem; font-weight: 500; }
+.secao-seta { color: var(--apagado); transition: transform 0.15s; }
+.secao-alternar[aria-expanded='true'] .secao-seta { transform: rotate(90deg); }
+.secao-alternar:hover .secao-seta { color: var(--tinta); }
+.secao-alternar:focus-visible { outline: 2px solid var(--tinta); outline-offset: 4px; border-radius: 6px; }
+.card-lista-rodape .botao-link { font-size: 0.88rem; }
+.card-cabecalho:has(.secao-alternar[aria-expanded='false']) { margin-bottom: 0; }
+.secao-titulo:has(.secao-alternar[aria-expanded='false']) { margin-bottom: 0; }
+
+/* Painel do Início: no computador, três por linha (seis números viram duas linhas iguais, sem um sozinho). */
+@media (min-width: 768px) { .cards.cards-painel { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Rótulo que, no celular, fica só para leitores de tela: o botão vira um ícone redondo. */
+@media (max-width: 767px) {
+  .rotulo-opcional {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .botao:has(> .rotulo-opcional) { width: 40px; padding: 0; }
+  .dia-agendar:has(> .rotulo-opcional) { width: 34px; height: 34px; padding: 0; justify-content: center; }
 }

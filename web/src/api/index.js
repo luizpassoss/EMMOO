@@ -5,8 +5,9 @@ import { createApiClient } from './client.js';
 export const api = createApiClient({
   baseUrl: import.meta.env.VITE_API_URL ?? '/api',
   getToken: lerToken,
+  // Sessão que deixou de valer (expirou ou o acesso foi desativado): volta ao login dizendo por quê.
   onUnauthorized: () => {
     limparSessao();
-    window.location.assign('/login');
+    window.location.assign('/login?sessao=encerrada');
   },
 });

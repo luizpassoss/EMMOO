@@ -45,8 +45,8 @@ export function assertValid(erros) {
 /** Valida um período de datas "AAAA-MM-DD" (inclusive) com tamanho máximo, ou lança ValidationError. */
 export function validarPeriodo({ inicio, fim } = {}, maxDias) {
   const erros = [];
-  if (!isDataISO(inicio)) erros.push({ campo: 'inicio', mensagem: 'Informe a data inicial (AAAA-MM-DD).' });
-  if (!isDataISO(fim)) erros.push({ campo: 'fim', mensagem: 'Informe a data final (AAAA-MM-DD).' });
+  if (!isDataISO(inicio)) erros.push({ campo: 'inicio', mensagem: 'Informe uma data inicial válida.' });
+  if (!isDataISO(fim)) erros.push({ campo: 'fim', mensagem: 'Informe uma data final válida.' });
   if (erros.length === 0) {
     const dias = diferencaEmDias(inicio, fim);
     if (dias < 0) erros.push({ campo: 'fim', mensagem: 'A data final deve ser igual ou posterior à inicial.' });

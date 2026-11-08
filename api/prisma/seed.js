@@ -1,47 +1,52 @@
 /**
  * Dados iniciais para o modo MySQL (npm run db:seed). Idempotente: pode rodar mais de uma vez.
- * ATENÇÃO: a senha de demonstração deve ser trocada antes de uso real.
+ * Tudo é criado dentro da escola de demonstração (código "emmoo").
+ * ATENÇÃO: as senhas de demonstração devem ser trocadas antes de uso real.
  */
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { HORARIOS_DEMO } from '../src/infra/memory/seed.js';
+import { ESCOLA_DEMO, HORARIOS_DEMO, PLANOS_DEMO, USUARIOS_DEMO } from '../src/infra/memory/seed.js';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const senhaHash = await bcrypt.hash('emmoo123', 10);
-  const usuarios = [
-    { nome: 'Lucimara', email: 'lucimara@emmoo.com.br', papel: 'coordenacao' },
-    { nome: 'Luiz', email: 'luiz@emmoo.com.br', papel: 'professor' },
-    { nome: 'Mary', email: 'mary@emmoo.com.br', papel: 'responsavel' },
-  ];
-  for (const usuario of usuarios) {
+  const escola = await prisma.escola.upsert({
+    where: { codigo: ESCOLA_DEMO.codigo },
+    update: {},
+    create: ESCOLA_DEMO,
+  });
+  const escolaId = escola.id;
+
+  // Usuários de demonstração: cria os que faltam e redefine o acesso (usuário e senha) dos que já existem,
+  // para as credenciais do README sempre funcionarem. Só afeta estes três e-mails, e só nesta escola.
+  for (const { senha, ...usuario } of USUARIOS_DEMO) {
+    const senhaHash = await bcrypt.hash(senha, 10);
     await prisma.usuario.upsert({
-      where: { email: usuario.email },
-      update: {},
-      create: { ...usuario, senhaHash },
+      where: { escolaId_email: { escolaId, email: usuario.email } },
+      update: { login: usuario.login, senhaHash },
+      create: { ...usuario, senhaHash, escolaId },
     });
   }
 
-  const nomePlano = 'Particular 1x/semana';
-  const planoExistente = await prisma.plano.findFirst({ where: { nome: nomePlano } });
-  if (!planoExistente) {
-    await prisma.plano.create({
-      data: { nome: nomePlano, tipo: 'particular', valor: 140, freqSemanal: 1, duracaoMin: 45 },
-    });
+  // Planos de exemplo: só cria os que ainda não existem (pelo nome), sem mexer nos já cadastrados.
+  for (const plano of PLANOS_DEMO) {
+    const existente = await prisma.plano.findFirst({ where: { escolaId, nome: plano.nome } });
+    if (!existente) await prisma.plano.create({ data: { ...plano, escolaId } });
   }
 
   // Horários de atendimento do professor (RF04) — os mesmos do modo memória.
-  const professor = await prisma.usuario.findUnique({ where: { email: 'luiz@emmoo.com.br' } });
+  const professor = await prisma.usuario.findUnique({
+    where: { escolaId_email: { escolaId, email: 'luiz@emmoo.com.br' } },
+  });
   for (const { diaSemana, horaInicio, duracaoMin } of HORARIOS_DEMO) {
     await prisma.horarioDisponivel.upsert({
       where: { professorId_diaSemana_horaInicio: { professorId: professor.id, diaSemana, horaInicio } },
       update: {},
-      create: { professorId: professor.id, diaSemana, horaInicio, duracaoMin },
+      create: { professorId: professor.id, diaSemana, horaInicio, duracaoMin, escolaId },
     });
   }
-  console.log('Seed concluído.');
+  console.log(`Seed concluído na escola "${escola.nome}" (código: ${escola.codigo}).`);
 }
 
 main()

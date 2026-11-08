@@ -24,6 +24,12 @@ export function hojeISO(agora = new Date()) {
   return `${agora.getFullYear()}-${doisDigitos(agora.getMonth() + 1)}-${doisDigitos(agora.getDate())}`;
 }
 
+/** Hora atual "HH:MM" no fuso do servidor (mesma referência de `hojeISO`). */
+export function horaAtual(agora = new Date()) {
+  const doisDigitos = (numero) => String(numero).padStart(2, '0');
+  return `${doisDigitos(agora.getHours())}:${doisDigitos(agora.getMinutes())}`;
+}
+
 /** Converte data e hora de calendário em Date (UTC). */
 export function paraDate(dataISO, hora = '00:00') {
   return new Date(`${dataISO}T${hora}:00.000Z`);

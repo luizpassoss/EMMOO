@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
-import { createMemoryRepositories } from '../../src/infra/memory/memoryRepositories.js';
-import { seedMemoria } from '../../src/infra/memory/seed.js';
 import { createAulaService } from '../../src/modules/aulas/aula.service.js';
 import { createHorarioService } from '../../src/modules/horarios/horario.service.js';
 import { createUsuarioService } from '../../src/modules/usuarios/usuario.service.js';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../src/shared/errors.js';
-import { hasherFake } from '../helpers/fakes.js';
+import { hasherFake, reposDaEscolaDemo } from '../helpers/fakes.js';
 
 // Seed com HOJE = quarta 07/10/2026: Ana tem aula às segundas 14:00 (aulas 1–8, desde 05/10)
 // e Pedro às quartas 15:30 (aulas 9–16, desde 07/10), ambos com o professor Luiz (id 2).
@@ -18,27 +16,102 @@ const SEMANA = { inicio: '2026-10-05', fim: '2026-10-11' };
 let repos;
 let carla; // segunda professora, para testar o isolamento entre professores
 beforeEach(async () => {
-  repos = createMemoryRepositories();
-  await seedMemoria(repos, hasherFake, { hoje: '2026-10-07' });
+  ({ repos } = await reposDaEscolaDemo({ hoje: '2026-10-07' }));
   carla = await repos.usuarios.create({ nome: 'Carla', email: 'carla@emmoo.com.br', senhaHash: 'h', papel: 'professor' });
 });
 
 describe('UsuarioService', () => {
-  const criar = () => createUsuarioService({ usuarios: repos.usuarios });
+  const criar = () => createUsuarioService({ usuarios: repos.usuarios, passwordHasher: hasherFake });
+  const nova = { nome: 'Bia', email: 'Bia@Email.com', login: 'Bia.Prof', senha: 'segredo1', papel: 'professor' };
 
   it('lista usuários sem expor o hash da senha, com filtro por papel', async () => {
     const todos = await criar().listar();
     assert.deepEqual(todos.map((u) => u.nome), ['Carla', 'Lucimara', 'Luiz', 'Mary']);
     assert.equal(todos[0].senhaHash, undefined);
+    assert.equal(todos.find((u) => u.nome === 'Lucimara').login, 'admin');
     assert.deepEqual((await criar().listar({ papel: 'responsavel' })).map((u) => u.nome), ['Mary']);
   });
   it('rejeita papel desconhecido', async () => {
     await assert.rejects(criar().listar({ papel: 'admin' }), ValidationError);
   });
+
+  it('cadastra usuário normalizando e-mail e login, com a senha guardada em hash', async () => {
+    const criado = await criar().criar(nova);
+    assert.deepEqual([criado.email, criado.login, criado.papel], ['bia@email.com', 'bia.prof', 'professor']);
+    assert.equal(criado.senhaHash, undefined);
+    assert.equal((await repos.usuarios.findByLogin('bia.prof')).senhaHash, 'hash:segredo1');
+  });
+  it('valida os dados e recusa e-mail ou usuário repetidos na escola', async () => {
+    await assert.rejects(criar().criar({ nome: 'B', email: 'x', login: 'a@b', senha: '123', papel: 'chefe' }), (erro) => {
+      assert.deepEqual(erro.details.map((d) => d.campo), ['nome', 'email', 'login', 'senha', 'papel']);
+      return true;
+    });
+    await assert.rejects(criar().criar({ ...nova, email: 'luiz@emmoo.com.br' }), { message: 'E-mail já cadastrado nesta escola.' });
+    await assert.rejects(criar().criar({ ...nova, login: 'admin' }), { message: 'Usuário já cadastrado nesta escola.' });
+  });
+  it('edita dados e perfil; senha em branco mantém a atual', async () => {
+    const editado = await criar().atualizar(carla.id, { ...nova, nome: 'Carla S.', senha: '' }, COORDENACAO);
+    assert.deepEqual([editado.nome, editado.login], ['Carla S.', 'bia.prof']);
+    assert.equal((await repos.usuarios.findById(carla.id)).senhaHash, 'h'); // não trocou
+    await criar().atualizar(carla.id, { ...nova, senha: 'outrasenha' }, COORDENACAO);
+    assert.equal((await repos.usuarios.findById(carla.id)).senhaHash, 'hash:outrasenha');
+    await assert.rejects(criar().atualizar(carla.id, { ...nova, senha: '12' }, COORDENACAO), ValidationError);
+    await assert.rejects(criar().atualizar(999, nova, COORDENACAO), NotFoundError);
+  });
+  it('ninguém muda o próprio perfil (a escola não fica sem coordenação)', async () => {
+    const dados = { nome: 'Lucimara', email: 'lucimara@emmoo.com.br', login: 'admin', papel: 'professor' };
+    await assert.rejects(criar().atualizar(1, dados, COORDENACAO), { message: 'Dados inválidos.' });
+    const mesmoPerfil = await criar().atualizar(1, { ...dados, papel: 'coordenacao', nome: 'Lucimara M.' }, COORDENACAO);
+    assert.equal(mesmoPerfil.nome, 'Lucimara M.');
+  });
+
+  it('desativa o acesso encerrando a sessão; reativa depois', async () => {
+    const desativado = await criar().desativar(String(carla.id), COORDENACAO);
+    assert.equal(desativado.ativo, false);
+    assert.equal((await repos.usuarios.findById(carla.id)).versaoSessao, 1); // o token antigo da Carla não vale mais
+    await assert.rejects(criar().desativar(carla.id, COORDENACAO), { message: 'Este acesso já está desativado.' });
+    assert.equal((await criar().listar({ papel: 'professor' })).find((u) => u.id === carla.id).ativo, false);
+
+    const reativado = await criar().reativar(carla.id);
+    assert.equal(reativado.ativo, true);
+    await assert.rejects(criar().reativar(carla.id), { message: 'Este acesso já está ativo.' });
+    await assert.rejects(criar().desativar(999, COORDENACAO), NotFoundError);
+  });
+
+  it('ninguém desativa o próprio acesso', async () => {
+    await assert.rejects(criar().desativar(1, COORDENACAO), {
+      name: 'ConflictError',
+      message: 'Você não pode desativar o seu próprio acesso.',
+    });
+  });
+
+  it('trocar o perfil ou redefinir a senha de alguém encerra as sessões dessa pessoa', async () => {
+    const versao = async () => (await repos.usuarios.findById(carla.id)).versaoSessao;
+    const dados = { nome: 'Carla', email: 'carla@emmoo.com.br', papel: 'professor' };
+    await criar().atualizar(carla.id, { ...dados, nome: 'Carla S.' }, COORDENACAO);
+    assert.equal(await versao(), 0); // só o nome: a sessão continua
+    await criar().atualizar(carla.id, { ...dados, papel: 'responsavel' }, COORDENACAO);
+    assert.equal(await versao(), 1);
+    await criar().atualizar(carla.id, { ...dados, papel: 'responsavel', senha: 'nova-senha' }, COORDENACAO);
+    assert.equal(await versao(), 2);
+    // A própria senha trocada não derruba quem está usando o sistema.
+    const lucimara = { nome: 'Lucimara', email: 'lucimara@emmoo.com.br', login: 'admin', papel: 'coordenacao' };
+    await criar().atualizar(1, { ...lucimara, senha: 'outra-senha' }, COORDENACAO);
+    assert.equal((await repos.usuarios.findById(1)).versaoSessao, 0);
+  });
 });
 
 describe('HorarioService (RF04)', () => {
-  const criar = () => createHorarioService({ horarios: repos.horarios, aulas: repos.aulas, usuarios: repos.usuarios });
+  // Relógio fixo: segunda 05/10, antes das aulas (salvo quando o teste diz outra coisa).
+  const criar = ({ hoje = '2026-10-05', agora = '08:00' } = {}) =>
+    createHorarioService({
+      horarios: repos.horarios,
+      aulas: repos.aulas,
+      feriados: repos.feriados,
+      usuarios: repos.usuarios,
+      hoje: () => hoje,
+      agora: () => agora,
+    });
 
   it('professor vê só os próprios horários; coordenação filtra por professor', async () => {
     assert.equal((await criar().listar({}, PROFESSOR)).length, 8);
@@ -96,6 +169,24 @@ describe('HorarioService (RF04)', () => {
     assert.equal((await criar().livres({ ...SEMANA, professorId: '2' }, COORDENACAO)).length, 7);
   });
 
+  it('RF05 — vaga que já passou não é oferecida (dias anteriores e horas de hoje que já foram)', async () => {
+    // Segunda 05/10 às 14:50: das vagas de segunda, só 15:30 e 16:15 ainda não começaram.
+    const livres = await criar({ agora: '14:50' }).livres(SEMANA, PROFESSOR);
+    assert.deepEqual(
+      livres.filter((vaga) => vaga.data === '2026-10-05').map((vaga) => vaga.hora),
+      ['15:30', '16:15'],
+    );
+    // Na quarta 07/10, as vagas de segunda já não aparecem.
+    const naQuarta = await criar({ hoje: '2026-10-07', agora: '08:00' }).livres(SEMANA, PROFESSOR);
+    assert.ok(naQuarta.every((vaga) => vaga.data >= '2026-10-07'));
+    assert.equal(naQuarta.length, 3); // quarta: 14:00, 14:45, 16:15 (15:30 é do Pedro)
+  });
+
+  it('usa a data e a hora atuais quando nenhum relógio é informado', async () => {
+    const semRelogio = createHorarioService({ horarios: repos.horarios, aulas: repos.aulas, usuarios: repos.usuarios, feriados: repos.feriados });
+    assert.deepEqual(await semRelogio.livres({ inicio: '2000-01-03', fim: '2000-01-09' }, PROFESSOR), []); // tudo no passado
+  });
+
   it('vagas livres exigem período válido e professor', async () => {
     await assert.rejects(criar().livres(SEMANA, COORDENACAO), ValidationError);
     await assert.rejects(criar().livres({ inicio: '2026-10-11', fim: '2026-10-05' }, PROFESSOR), ValidationError);
@@ -104,13 +195,17 @@ describe('HorarioService (RF04)', () => {
 });
 
 describe('AulaService (RF05, RN08–RN10)', () => {
-  const criar = () =>
+  const criar = ({ agora = '08:00' } = {}) =>
     createAulaService({
       aulas: repos.aulas,
+      solicitacoes: repos.solicitacoes,
+      diarios: repos.diarios,
+      feriados: repos.feriados,
       alunos: repos.alunos,
       planos: repos.planos,
       usuarios: repos.usuarios,
       hoje: () => '2026-10-05', // segunda-feira da semana do seed
+      agora: () => agora,
     });
   const agendamento = { alunoId: 2, professorId: 2, data: '2026-10-05', hora: '14:45' };
 
@@ -192,6 +287,14 @@ describe('AulaService (RF05, RN08–RN10)', () => {
     await assert.rejects(criar().agendar({}), ValidationError);
   });
 
+  it('não agenda com professor de acesso desativado', async () => {
+    await repos.usuarios.update(2, { ativo: false });
+    await assert.rejects(criar().agendar(agendamento), (erro) => {
+      assert.deepEqual(erro.details, [{ campo: 'professorId', mensagem: 'Este professor está com o acesso desativado.' }]);
+      return true;
+    });
+  });
+
   it('usa 45 min quando o plano do aluno não existe mais', async () => {
     const orfao = await repos.alunos.create({ nome: 'Órfão', planoId: 99, status: 'ativo' });
     const [aula] = await criar().agendar({ ...agendamento, alunoId: orfao.id });
@@ -219,18 +322,56 @@ describe('AulaService (RF05, RN08–RN10)', () => {
     assert.equal((await criar().agendar(agendamento))[0].data, '2026-10-05');
   });
 
-  it('não cancela aula de dia anterior', async () => {
+  it('não cancela aula que já começou: de dia anterior ou de hoje, depois do horário', async () => {
     const [passada] = await repos.aulas.createMany([
       { alunoId: 2, professorId: 2, data: '2026-10-02', hora: '10:00', duracaoMin: 45, status: 'agendada' },
     ]);
-    await assert.rejects(criar().cancelar(passada.id, COORDENACAO), {
-      message: 'Aulas de dias anteriores não podem ser canceladas.',
+    const mensagem = { message: 'Esta aula já começou e não pode mais ser cancelada.' };
+    await assert.rejects(criar().cancelar(passada.id, COORDENACAO), mensagem);
+    // Ana tem aula hoje (05/10) às 14:00 (aula 1).
+    await assert.rejects(criar({ agora: '14:00' }).cancelar(1, COORDENACAO), mensagem);
+    assert.equal((await criar({ agora: '13:59' }).cancelar(1, COORDENACAO)).status, 'cancelada');
+  });
+
+  it('aula cancelada sai da agenda de todos, qualquer que seja o motivo; realizada e falta continuam', async () => {
+    await repos.aulas.update(1, { status: 'cancelada', motivoCancelamento: 'inativacao' }); // Ana, 05/10
+    await repos.aulas.update(9, { status: 'cancelada', motivoCancelamento: 'manual' }); // Pedro, 07/10
+    for (const usuario of [COORDENACAO, PROFESSOR, RESPONSAVEL]) {
+      assert.deepEqual(await criar().listar(SEMANA, usuario), [], usuario.papel);
+    }
+    await repos.aulas.update(1, { status: 'realizada', motivoCancelamento: null });
+    await repos.aulas.update(9, { status: 'falta', motivoCancelamento: null });
+    assert.deepEqual((await criar().listar(SEMANA, COORDENACAO)).map((aula) => aula.status), ['realizada', 'falta']);
+  });
+
+  it('cancelar tira a aula da agenda já na próxima consulta, em qualquer semana', async () => {
+    await criar().cancelar(2, COORDENACAO); // Ana, segunda 12/10
+    const proximaSemana = await criar().listar({ inicio: '2026-10-12', fim: '2026-10-18' }, COORDENACAO);
+    assert.deepEqual(proximaSemana.map((aula) => aula.id), [10]); // só o Pedro, na quarta
+    // O registro continua guardado (histórico), como cancelado à mão.
+    assert.equal((await repos.aulas.findById(2)).motivoCancelamento, 'manual');
+  });
+
+  it('cancelamento na agenda fica registrado como manual (não volta ao reativar o aluno)', async () => {
+    await criar().cancelar(1, COORDENACAO);
+    assert.equal((await repos.aulas.findById(1)).motivoCancelamento, 'manual');
+  });
+
+  it('não agenda num horário de hoje que já passou', async () => {
+    await assert.rejects(criar({ agora: '15:00' }).agendar({ ...agendamento, hora: '14:45' }), (erro) => {
+      assert.deepEqual(erro.details, [{ campo: 'hora', mensagem: 'Este horário de hoje já passou. Escolha um mais tarde.' }]);
+      return true;
     });
+    const [nova] = await criar({ agora: '15:00' }).agendar({ ...agendamento, hora: '16:15' });
+    assert.deepEqual([nova.data, nova.hora, nova.motivoCancelamento], ['2026-10-05', '16:15', null]);
   });
 
   it('usa a data atual quando nenhuma é informada', async () => {
     const semRelogio = createAulaService({
       aulas: repos.aulas,
+      solicitacoes: repos.solicitacoes,
+      diarios: repos.diarios,
+      feriados: repos.feriados,
       alunos: repos.alunos,
       planos: repos.planos,
       usuarios: repos.usuarios,

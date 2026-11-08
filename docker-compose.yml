@@ -29,7 +29,12 @@ services:
       DB_DRIVER: mysql
       DATABASE_URL: mysql://emmoo:emmoo@db:3306/emmoo
       JWT_SECRET: troque-este-segredo-em-producao
+      CADASTRO_ESCOLAS: fechado # "aberto" libera o cadastro público de escolas novas
       CORS_ORIGIN: http://localhost:8080
+      APP_URL: http://localhost:8080 # endereço do front nos links de e-mail ("esqueci minha senha")
+      # A API fica atrás do nginx (container web): o IP de quem acessa vem do X-Forwarded-For, para o limite de
+      # tentativas de login. Só a rede interna é de confiança — quem chama a porta 3333 de fora não forja o endereço.
+      TRUST_PROXY: loopback, uniquelocal
     # Sincroniza o schema, cria os dados iniciais e sobe a API.
     command: sh -c "npx prisma db push --skip-generate && node prisma/seed.js && node src/server.js"
     depends_on:

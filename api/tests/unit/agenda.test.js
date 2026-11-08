@@ -64,10 +64,11 @@ describe('agenda — intervalos e conflitos (RN09/RN10)', () => {
     assert.equal(inicio.toISOString(), '2026-10-05T14:00:00.000Z');
     assert.equal(fim.toISOString(), '2026-10-05T14:45:00.000Z');
   });
-  it('só aulas canceladas deixam de ocupar o horário', () => {
+  it('aula cancelada ou com falta avisada libera o horário; agendada e realizada ocupam', () => {
     assert.equal(ocupaHorario(aula('14:00')), true);
     assert.equal(ocupaHorario(aula('14:00', { status: 'realizada' })), true);
     assert.equal(ocupaHorario(aula('14:00', { status: 'cancelada' })), false);
+    assert.equal(ocupaHorario(aula('14:00', { status: 'falta' })), false); // o horário vai para a reposição de outro aluno
   });
   it('encontra a aula em conflito, ignorando canceladas e aulas que só se encostam', () => {
     const existentes = [aula('13:15'), aula('14:00', { status: 'cancelada' }), aula('14:30', { id: 7 })];

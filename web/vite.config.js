@@ -27,8 +27,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    // Em desenvolvimento, /api é encaminhado para a API local (evita CORS).
-    proxy: { '/api': { target: API_URL, changeOrigin: true, configure: avisarApiDesligada } },
+    // Em desenvolvimento (e no preview), /api é encaminhado para a API local (evita CORS). O xfwd repassa o endereço
+    // de quem acessa (X-Forwarded-For): com TRUST_PROXY=loopback na API, o limite de tentativas de login conta por
+    // pessoa, e não pelo próprio proxy — importante quando o app é aberto por um túnel (ngrok).
+    proxy: { '/api': { target: API_URL, changeOrigin: true, xfwd: true, configure: avisarApiDesligada } },
   },
   test: {
     environment: 'jsdom',
@@ -38,7 +40,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['src/**/*.{js,jsx}'],
-      exclude: ['src/main.jsx', 'src/setupTests.js', 'src/**/*.test.{js,jsx}'],
+      exclude: ['src/main.jsx', 'src/setupTests.js', 'src/apoioTestes.js', 'src/**/*.test.{js,jsx}'],
       thresholds: { lines: 25, functions: 25, branches: 25, statements: 25 },
     },
   },
