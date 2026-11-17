@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api/index.js';
@@ -119,6 +120,52 @@ describe('LoginPage', () => {
   it('redireciona quem já está autenticado', async () => {
     renderizar({ autenticado: true, login: vi.fn() });
     expect(await screen.findByText('Início')).toBeInTheDocument();
+  });
+
+  describe('link de outra escola com uma sessão já aberta', () => {
+    const EMMOO = { codigo: 'emmoo', nome: 'Escola de Música EMMOO' };
+
+    /** Contexto com sessão de verdade: sair troca a tela, como no AuthProvider. */
+    function ComSessao({ endereco }) {
+      const [autenticado, setAutenticado] = useState(true);
+      const valor = {
+        autenticado,
+        usuario: autenticado ? { nome: 'Luiz', escola: EMMOO } : null,
+        login: vi.fn(),
+        logout: () => setAutenticado(false),
+      };
+      return (
+        <AuthContext.Provider value={valor}>
+          <MemoryRouter initialEntries={[endereco]}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/" element={<p>Início</p>} />
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      );
+    }
+
+    it('pergunta onde ficar; "Sair e entrar na outra escola" abre o login dela', () => {
+      render(<ComSessao endereco="/login?escola=Sol" />);
+      expect(screen.getByText(/Você está com uma sessão aberta em/)).toHaveTextContent(
+        'Você está com uma sessão aberta em Escola de Música EMMOO. Este link é de outra escola (código sol).',
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Sair e entrar na outra escola' }));
+      expect(screen.getByText('sol')).toBeInTheDocument(); // a escola do link, já escolhida
+      expect(screen.getByLabelText('Usuário ou e-mail')).toBeInTheDocument();
+    });
+
+    it('"Continuar na escola atual" segue para o sistema', () => {
+      render(<ComSessao endereco="/login?escola=sol" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Continuar na escola atual' }));
+      expect(screen.getByText('Início')).toBeInTheDocument();
+    });
+
+    it('link da mesma escola (em qualquer caixa) nem pergunta', () => {
+      render(<ComSessao endereco="/login?escola=EMMOO" />);
+      expect(screen.getByText('Início')).toBeInTheDocument();
+    });
   });
 
   it('avisa quando a sessão terminou (expirou ou o acesso foi desativado)', async () => {

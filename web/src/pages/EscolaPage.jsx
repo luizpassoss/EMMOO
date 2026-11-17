@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/index.js';
 import { useAuth } from '../auth/AuthContext.jsx';
+import Ajuda from '../components/Ajuda.jsx';
 import Campo from '../components/Campo.jsx';
 import CodigoPix from '../components/CodigoPix.jsx';
 import { Aviso, CabecalhoPagina, Carregando, useAviso } from '../components/Estrutura.jsx';
 import Icone from '../components/Icone.jsx';
+import { copiarTexto } from '../utils/copiar.js';
 import { mapearErros } from '../utils/erros.js';
 import { foiAlterado } from '../utils/format.js';
 
@@ -25,6 +27,48 @@ const doServidor = (escola) => ({
   recebedor: escola.pix.recebedor ?? '',
   cidade: escola.pix.cidade ?? '',
 });
+
+/** Endereço de entrada com a escola já escolhida (o login aceita ?escola=): quem abre só digita usuário e senha. */
+export function linkDeAcesso(codigo, origem = window.location.origin) {
+  return `${origem}/login?escola=${encodeURIComponent(codigo)}`;
+}
+
+/** O link de acesso da equipe, pronto para copiar e enviar (mensagem, e-mail, grupo da escola). */
+function LinkDeAcesso({ codigo }) {
+  const campoRef = useRef(null);
+  const [copiado, setCopiado] = useState(null); // true: copiado; false: não deu (o link fica selecionado)
+  const link = linkDeAcesso(codigo);
+
+  useEffect(() => {
+    if (copiado === null) return undefined;
+    const temporizador = setTimeout(() => setCopiado(null), 3000);
+    return () => clearTimeout(temporizador);
+  }, [copiado]);
+
+  return (
+    <div className="campo">
+      <div className="campo-rotulo">
+        <label htmlFor="link-de-acesso">Link de acesso da equipe</label>
+        <Ajuda sobre="Link de acesso da equipe">
+          Envie a professores e responsáveis: o link já abre o login com a escola escolhida, e só falta o usuário e a senha.
+        </Ajuda>
+      </div>
+      <div className="campo-copiar">
+        <input id="link-de-acesso" ref={campoRef} readOnly value={link} onFocus={(evento) => evento.target.select()} />
+        <button type="button" className="botao botao-secundario" onClick={async () => setCopiado(await copiarTexto(link, campoRef.current))}>
+          <Icone nome={copiado ? 'confirmado' : 'copiar'} tamanho={18} />
+          {/* No celular, só o ícone: o espaço fica para o link. */}
+          <span className="rotulo-opcional">{copiado ? 'Copiado' : 'Copiar'}</span>
+        </button>
+      </div>
+      {/* Anunciado pelo leitor de tela sem disputar com o aviso da página (o "status" dela). */}
+      <span className="sr-only" aria-live="polite">
+        {copiado ? 'Link copiado.' : copiado === false ? 'Não foi possível copiar: o link está selecionado.' : ''}
+      </span>
+      {copiado === false && <small className="dica-campo">O link está selecionado: copie pelo menu do aparelho.</small>}
+    </div>
+  );
+}
 
 /**
  * Dados da escola (coordenação): o nome que aparece no sistema e nos recibos, e o Pix pelo qual as famílias
@@ -116,10 +160,11 @@ export default function EscolaPage() {
               <Campo rotulo="Nome da escola" erro={erros.nome}>
                 <input name="nome" autoComplete="organization" value={form.nome} onChange={alterar} />
               </Campo>
-              <Campo rotulo="Código de acesso">
+              <Campo rotulo="Código de acesso" ajuda="A equipe usa este código para entrar. Ele não muda: assim, links e acessos já enviados continuam valendo.">
                 <input value={escola.codigo} readOnly disabled />
               </Campo>
             </div>
+            <LinkDeAcesso codigo={escola.codigo} />
           </article>
 
           <article className="card formulario">

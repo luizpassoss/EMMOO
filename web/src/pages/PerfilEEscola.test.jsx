@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api/index.js';
 import { ApiError } from '../api/client.js';
 import { AuthContext } from '../auth/AuthContext.jsx';
-import EscolaPage from './EscolaPage.jsx';
+import EscolaPage, { linkDeAcesso } from './EscolaPage.jsx';
 import PerfilPage from './PerfilPage.jsx';
 
 vi.mock('../api/index.js', () => ({ api: { get: vi.fn(), put: vi.fn() } }));
@@ -148,6 +148,36 @@ describe('EscolaPage — dados da escola e Pix', () => {
         usuario: { ...coordenacao, escola: { ...ESCOLA, nome: 'Escola EMMOO Centro' } },
       }),
     );
+  });
+
+  it('mostra o link de acesso da equipe, com a escola já escolhida, e copia', async () => {
+    const writeText = vi.fn().mockResolvedValue();
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    api.get.mockResolvedValue(SEM_PIX);
+    renderizar(<EscolaPage />, { usuario: coordenacao });
+    const link = `${window.location.origin}/login?escola=emmoo`;
+    expect(await screen.findByLabelText('Link de acesso da equipe')).toHaveValue(link);
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(link));
+    expect(await screen.findByRole('button', { name: 'Copiado' })).toBeInTheDocument();
+    expect(screen.getByText('Link copiado.')).toBeInTheDocument(); // anunciado ao leitor de tela
+    expect(screen.queryByRole('status')).not.toBeInTheDocument(); // sem disputar com o aviso da página
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ajuda: Link de acesso da equipe' }));
+    expect(screen.getByText(/já abre o login com a escola escolhida/)).toBeInTheDocument();
+  });
+
+  it('sem a área de transferência, deixa o link selecionado para copiar pelo menu do aparelho', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('negado')) }, configurable: true });
+    api.get.mockResolvedValue(SEM_PIX);
+    renderizar(<EscolaPage />, { usuario: coordenacao });
+    fireEvent.click(await screen.findByRole('button', { name: 'Copiar' }));
+    expect(await screen.findByText('O link está selecionado: copie pelo menu do aparelho.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Link de acesso da equipe')).toHaveFocus();
+  });
+
+  it('linkDeAcesso: endereço do login com o código da escola', () => {
+    expect(linkDeAcesso('escola-sol', 'https://emmoo.app')).toBe('https://emmoo.app/login?escola=escola-sol');
   });
 
   it('erro ao carregar aparece na página', async () => {

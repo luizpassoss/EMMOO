@@ -1,4 +1,8 @@
 export const DEV_JWT_SECRET = 'dev-secret-altere-em-producao';
+/** Segredos que aparecem no repositório (código, .env.example, docker-compose): públicos, nunca valem em produção. */
+const SEGREDOS_DE_EXEMPLO = [DEV_JWT_SECRET, 'troque-este-segredo-em-producao'];
+export const SEGREDO_MINIMO = 32;
+const COMO_GERAR = `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`;
 const DRIVERS = ['memory', 'mysql'];
 
 /**
@@ -20,9 +24,20 @@ export function loadEnv(source = process.env) {
     throw new Error(`PORT inválida: "${source.PORT}".`);
   }
 
-  const jwtSecret = source.JWT_SECRET ?? DEV_JWT_SECRET;
-  if (nodeEnv === 'production' && jwtSecret === DEV_JWT_SECRET) {
-    throw new Error('Defina um JWT_SECRET próprio em produção.');
+  // Quem conhece o segredo monta um token de qualquer pessoa. Em produção: próprio, longo e fora do repositório.
+  // Em desenvolvimento, o de exemplo funciona, mas a API avisa ao iniciar (ex.: antes de abrir um túnel como o ngrok).
+  const avisos = [];
+  const jwtSecret = source.JWT_SECRET || DEV_JWT_SECRET;
+  const segredoDeExemplo = SEGREDOS_DE_EXEMPLO.includes(jwtSecret);
+  if (nodeEnv === 'production' && (segredoDeExemplo || jwtSecret.length < SEGREDO_MINIMO)) {
+    throw new Error(
+      `Defina um JWT_SECRET próprio em produção, com pelo menos ${SEGREDO_MINIMO} caracteres aleatórios. Para gerar: ${COMO_GERAR}`,
+    );
+  }
+  if (segredoDeExemplo && nodeEnv !== 'test') {
+    avisos.push(
+      `JWT_SECRET é o de exemplo, que é público: não exponha esta API na internet. Para gerar um próprio: ${COMO_GERAR}`,
+    );
   }
 
   // Cadastro público de escolas novas: aberto em desenvolvimento, fechado em produção (salvo se liberado).
@@ -47,6 +62,10 @@ export function loadEnv(source = process.env) {
   if (source.APP_URL && !ENDERECO.test(source.APP_URL)) {
     throw new Error(`APP_URL inválida: "${source.APP_URL}". Use o endereço do front, ex.: https://emmoo.escola.com.br`);
   }
+  // Em produção, sem ela os links dos e-mails apontariam para localhost (e o HTTPS não seria exigido do navegador).
+  if (nodeEnv === 'production' && !source.APP_URL) {
+    throw new Error('Defina APP_URL em produção: o endereço público do sistema, ex.: https://emmoo.escola.com.br');
+  }
   const appUrl = (source.APP_URL || corsOrigin.find((origem) => ENDERECO.test(origem)) || 'http://localhost:5173').replace(
     /\/+$/,
     '',
@@ -67,6 +86,9 @@ export function loadEnv(source = process.env) {
     corsOrigin,
     appUrl,
     trustProxy: lerTrustProxy(source.TRUST_PROXY),
+    // Produção num serviço só: a API entrega também o front construído (a imagem Docker o põe em /app/public).
+    pastaDoFront: source.FRONT_DIR || null,
+    avisos, // o que funciona, mas não deveria ir assim para a internet (mostrado ao iniciar)
   };
 }
 

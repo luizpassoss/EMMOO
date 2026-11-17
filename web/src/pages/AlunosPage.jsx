@@ -93,6 +93,7 @@ export default function AlunosPage() {
       setFormInicial(dadosDoFormulario(aluno));
     }
     else fecharPainel(); // link para um aluno que não existe
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só a URL e o carregamento: recarregar a lista não pode apagar o que se digita
   }, [painel, carregando]);
 
   const termo = normalizar(busca.trim());
@@ -219,7 +220,9 @@ export default function AlunosPage() {
       await carregar(); // a lista atualiza antes do aviso, para ele não anunciar algo ainda visível
       setAviso(`Cadastro de ${aluno.nome} excluído permanentemente.${detalhe}`);
     } catch (e) {
-      setErro(e.message);
+      // A exclusão parte da janela do aluno: o motivo da recusa (ex.: mensalidades pagas) aparece nela.
+      if (editandoId === aluno.id) setErrosForm({ geral: e.message });
+      else setErro(e.message);
     }
   }
 

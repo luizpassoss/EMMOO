@@ -18,10 +18,11 @@ function escolaInicial(codigoDoLink) {
 }
 
 export default function LoginPage() {
-  const { login, autenticado } = useAuth();
+  const { login, autenticado, usuario, logout } = useAuth();
   const location = useLocation();
   const [params] = useSearchParams();
   const [conhecida] = useState(() => escolaInicial(params.get('escola')));
+  const [continuarNaAtual, setContinuarNaAtual] = useState(false);
   const [escola, setEscola] = useState(conhecida?.codigo ?? '');
   const [trocandoEscola, setTrocandoEscola] = useState(!conhecida);
   const [identificador, setIdentificador] = useState('');
@@ -71,18 +72,47 @@ export default function LoginPage() {
     }
   }
 
-  if (autenticado) return <Navigate to={destino} replace state={INICIO_DA_SESSAO} />;
+  const marca = (
+    <div className="login-marca">
+      <span className="marca-icone">
+        <Icone nome="nota" tamanho={40} />
+      </span>
+      <h1>EMMOO</h1>
+      <p className="login-slogan">Gestão da escola de música</p>
+    </div>
+  );
+
+  if (autenticado) {
+    // Já há uma sessão aberta neste aparelho, e o link é de OUTRA escola (ex.: professor que dá aula em duas):
+    // em vez de levar em silêncio para a escola atual, pergunta onde a pessoa quer ficar.
+    const atual = usuario?.escola;
+    const doLink = params.get('escola')?.trim().toLowerCase();
+    if (doLink && atual?.codigo && doLink !== atual.codigo && !continuarNaAtual) {
+      return (
+        <main className="login">
+          <div className="login-card">
+            {marca}
+            <p className="login-outra-escola">
+              Você está com uma sessão aberta em <strong>{atual.nome ?? atual.codigo}</strong>. Este link é de outra escola
+              (código <strong>{doLink}</strong>).
+            </p>
+            <button type="button" className="botao botao-primario" onClick={logout}>
+              Sair e entrar na outra escola
+            </button>
+            <button type="button" className="botao botao-secundario" onClick={() => setContinuarNaAtual(true)}>
+              Continuar na escola atual
+            </button>
+          </div>
+        </main>
+      );
+    }
+    return <Navigate to={destino} replace state={INICIO_DA_SESSAO} />;
+  }
 
   return (
     <main className="login">
       <form className="login-card" onSubmit={entrar} noValidate>
-        <div className="login-marca">
-          <span className="marca-icone">
-            <Icone nome="nota" tamanho={40} />
-          </span>
-          <h1>EMMOO</h1>
-          <p className="login-slogan">Gestão da escola de música</p>
-        </div>
+        {marca}
 
         {trocandoEscola ? (
           <label className="campo">
@@ -194,6 +224,9 @@ export default function LoginPage() {
           Sua escola ainda não usa o EMMOO? <Link to="/cadastro">Cadastrar escola</Link>
         </p>
       )}
+      <p className="login-legal">
+        <Link to="/privacidade">Aviso de privacidade</Link>
+      </p>
     </main>
   );
 }

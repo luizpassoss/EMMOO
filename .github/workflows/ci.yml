@@ -29,7 +29,7 @@ jobs:
         run: npm run test:coverage
 
   web:
-    name: Web — testes, cobertura (meta 25%) e build
+    name: Web — lint, testes, cobertura (meta 25%) e build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -41,18 +41,61 @@ jobs:
           node-version: 22
       - name: Instalar dependências
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Lint (inclui as regras dos hooks do React)
+        run: npm run lint
       - name: Testes com cobertura
         run: npm run test:coverage
       - name: Build de produção
         run: npm run build
 
   docker:
-    name: Build das imagens Docker
+    name: Build da imagem Docker (API + front)
+    # Na main, quem constrói a imagem é o deploy (logo abaixo); aqui, só confere que ela constrói (PRs e develop).
+    if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: [api, web]
     steps:
       - uses: actions/checkout@v4
-      - name: Imagem da API
-        run: docker build -t emmoo-api ./api
-      - name: Imagem do Web
-        run: docker build -t emmoo-web ./web
+      - name: Imagem única (a API entrega o front construído)
+        run: docker build -t emmoo .
+
+  # Deploy contínuo (RFC 5.4): a cada push na main com os testes passando, a imagem vai para o ECR e o servidor
+  # (EC2, atrás do Nginx e do CloudFront) se atualiza pelo SSM — sem SSH e sem chave da AWS guardada no GitHub:
+  # o GitHub prova quem é (OIDC) e recebe credenciais temporárias de um papel que só pode fazer isso.
+  deploy:
+    name: Deploy na AWS (ECR → EC2 via SSM)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [api, web]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    concurrency:
+      group: deploy-producao
+      cancel-in-progress: false
+    # Sem "environment": com ele, a identidade que o GitHub apresenta à AWS deixa de dizer o ramo, e o papel da AWS
+    # só aceita a main (repo:luizpassoss/EMMOO:ref:refs/heads/main).
+    env:
+      AWS_REGION: sa-east-1
+      REPOSITORIO_ECR: 740997306124.dkr.ecr.sa-east-1.amazonaws.com/emmoo
+      INSTANCIA: i-0c923739c5a18b389
+      URL_PUBLICA: https://d1uyezscfz84pc.cloudfront.net
+    steps:
+      - uses: actions/checkout@v4
+      - name: Credenciais temporárias da AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::740997306124:role/emmoo-github-deploy
+          aws-region: sa-east-1
+      - name: Entrar no ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Construir e enviar a imagem (versão = commit)
+        run: |
+          docker build -t "$REPOSITORIO_ECR:$GITHUB_SHA" .
+          docker push "$REPOSITORIO_ECR:$GITHUB_SHA"
+      - name: Atualizar o servidor (SSM)
+        env:
+          IMAGEM: ${{ env.REPOSITORIO_ECR }}:${{ github.sha }}
+        run: bash deploy/aws/disparar.sh
+      - name: Conferir o sistema no ar (HTTPS, pelo CloudFront)
+        run: curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "$URL_PUBLICA/api/health"

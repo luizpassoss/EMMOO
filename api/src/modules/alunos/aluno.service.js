@@ -5,6 +5,9 @@ import { assertValid, parseId } from '../../shared/validation.js';
 import { STATUS_ALUNO, validarAluno } from './aluno.validator.js';
 
 export const MOTIVO_CANCELAMENTO_INATIVACAO = 'Aluno inativado.';
+export const MENSAGEM_EXCLUSAO_COM_PAGAMENTO =
+  'Este aluno tem mensalidades pagas, com recibos já emitidos: o cadastro fica inativo para manter o histórico ' +
+  'financeiro. Só um cadastro sem pagamentos pode ser excluído.';
 
 /** Casos de uso de alunos (RF02) e regra RN08 (aluno inativo). */
 export function createAlunoService({
@@ -128,14 +131,18 @@ export function createAlunoService({
     },
 
     /**
-     * Exclusão permanente — só de aluno inativo (inativar primeiro evita apagar alguém por engano).
-     * Apaga também todo o histórico do aluno (aulas, diários, solicitações e mensalidades).
+     * Exclusão permanente — só de aluno inativo (inativar primeiro evita apagar alguém por engano) e sem mensalidade
+     * paga: recibos numerados já entregues à família não podem sumir, nem os relatórios de meses fechados mudar —
+     * esse cadastro fica inativo. Sem pagamentos (ex.: cadastro feito por engano), apaga também todo o histórico do
+     * aluno (aulas, diários, solicitações e mensalidades em aberto ou canceladas).
      */
     async excluir(id) {
       const atual = await buscar(id);
       if (atual.status !== 'inativo') {
         throw new ConflictError('Só é possível excluir aluno inativo. Inative o aluno antes.');
       }
+      const pagas = (await mensalidades.list({ alunoId: atual.id })).filter((mensalidade) => mensalidade.status === 'paga');
+      if (pagas.length > 0) throw new ConflictError(MENSAGEM_EXCLUSAO_COM_PAGAMENTO);
       return alunos.remove(atual.id);
     },
   };

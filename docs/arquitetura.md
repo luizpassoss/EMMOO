@@ -8,11 +8,20 @@ Implementação da arquitetura definida na RFC (C4 — contexto, containers e co
 Navegador (desktop ou celular)
         │  HTTPS
         ▼
- Web — SPA React servida pelo Nginx ──/api──►  API REST — Node.js + Express  ──SQL──►  MySQL (Prisma)
-                                                      │
-                                                      ├──SMTP──► Serviço de e-mail (alertas de pagamento, opcional)
-                                                      └── rotina de hora em hora (mensalidades do mês e alertas)
+ CloudFront (AWS) — certificado HTTPS; cache só de assets/
+        │  HTTP, com cabeçalho secreto (o firewall do servidor só aceita o CloudFront)
+        ▼
+ EC2 em sa-east-1 — Nginx (proxy reverso)
+        ▼
+ Contêiner EMMOO (uma imagem, do ECR): Node.js + Express
+   ├── /api/*  → API REST (camadas abaixo)  ──SQL──►  MySQL (contêiner, volume no disco)  ──backup diário──► S3
+   ├── /assets, /index.html…  → o front React já construído (Vite), na mesma origem
+   ├──SMTP──► Serviço de e-mail (alertas de pagamento e "esqueci minha senha", opcional)
+   └── rotina de hora em hora (mensalidades do mês e alertas)
 ```
+
+Em desenvolvimento, o front roda no Vite (porta 5173), que encaminha `/api` à API (porta 3333). Em produção, a imagem
+do [Dockerfile](../Dockerfile) constrói o front e a API o entrega (`FRONT_DIR`), ver ADR 41; o deploy na AWS está na ADR 44.
 
 ## Componentes da API (camadas)
 
@@ -66,6 +75,14 @@ Requisição com o token
 - Escola nova: `POST /api/escolas` cria a escola e a coordenação, já com sessão; a coordenação cadastra professores
   e responsáveis em **Usuários**. O cadastro público é controlado por `CADASTRO_ESCOLAS` (aberto em desenvolvimento,
   fechado em produção).
+- A escola e a coordenação nascem numa gravação só: `escolas.criarComCoordenacao` (no Prisma, a escrita aninhada
+  `escola.create({ usuarios: { create } })`, que roda numa transação). Uma falha entre as duas não deixa uma escola
+  sem ninguém, nem o código preso a ela.
+- `GET /api/escolas/disponibilidade?codigo=` responde enquanto a pessoa digita o código no cadastro (o front espera uma
+  pausa de 400 ms e só consulta códigos no formato certo). As duas rotas públicas têm limite por IP (`LIMITES_DO_CADASTRO`
+  em `escola.service.js`, com o `criarLimitador` do login): 5 cadastros por hora e 60 consultas a cada 15 minutos.
+- O login aceita `?escola=codigo`; a página **Escola** mostra esse link pronto para copiar. Com uma sessão aberta em outra
+  escola, o login pergunta se a pessoa quer sair e entrar na escola do link ou continuar na atual.
 - Token de antes do multi-tenant (sem escola) recebe 401 "Sessão expirada" e a pessoa entra de novo.
 
 ## Decisões de arquitetura (ADRs)
@@ -79,7 +96,7 @@ Requisição com o token
 | 5 | Erros tipados (`AppError` e subclasses) | Respostas HTTP consistentes | Um único middleware trata todos os erros |
 | 6 | `node:test` na API e Vitest no front | Test runner nativo, sem dependências na API | Cobertura medida no CI com metas de 75% / 25% |
 | 7 | Conflito de agenda verificado no serviço, com índices no banco | Conflito é sobreposição de intervalos (14:00–14:45 × 14:30), não só hora igual; e uma restrição única impediria reagendar o horário de uma aula cancelada, que fica no histórico | `aula.service` usa `encontrarAulaEmConflito` (RN09/RN10); `@@index` em professor/aluno + data. *Revisado na iteração 2 — antes era `@@unique`.* |
-| 8 | Deploy com Docker + Nginx em nuvem via CI/CD | Diretrizes da disciplina (sem PaaS de front, sem deploy manual por ssh/ftp) | Imagens construídas no pipeline |
+| 8 | Deploy com Docker em nuvem via CI/CD | Diretrizes da disciplina (sem PaaS de front, sem deploy manual por ssh/ftp) | Imagem construída no pipeline e publicada no ECR; o servidor se atualiza pelo SSM (ADR 44). O Nginx segue como proxy reverso, e o front passou a ser entregue pela própria API (ADR 41) |
 | 9 | Série semanal atômica | Agendar "toda segunda às 14h" não pode deixar metade das aulas criadas | Todas as datas são checadas antes; o Prisma grava a série numa `$transaction` |
 | 10 | Escopo da agenda por papel decidido no serviço | Uma única rota `GET /aulas` atende os três perfis sem vazar dados (RN01–RN03) | Professor recebe só as próprias aulas; responsável, só as dos dependentes |
 | 11 | "Voltar" nas subpáginas e formulários na URL (`?aluno=novo`, `?aluno=3`, `?plano=novo`, `?aula=nova`) | O voltar do navegador/celular deve fechar o formulário, não sair da página; link aberto direto não pode tirar a pessoa do sistema | `BotaoVoltar` usa `history.state.idx` do React Router (sem página anterior → Início) e aparece só onde `CabecalhoPagina` recebe `voltar` (histórico do aluno, histórico de pagamentos, minha conta) — as páginas do menu já estão a um toque (ver ADR 39); `usePainel` abre o formulário com uma entrada no histórico e fecha voltando a ela |
@@ -111,13 +128,18 @@ Requisição com o token
 | 37 | Planilha CSV (UTF-8 com BOM, `;`, vírgula decimal) em vez de XLSX | A contabilidade abre no Excel; CSV não precisa de biblioteca e abre em qualquer planilha | `shared/csv.js` põe a marca BOM (acentos certos no Excel), separa por `;` e escreve números e datas no formato brasileiro; texto que começa com `=`, `+`, `-` ou `@` ganha um apóstrofo, contra injeção de fórmula |
 | 38 | Feriados nacionais calculados (não uma tabela fixa) e cadastrados como feriados comuns da escola | Os móveis mudam todo ano (Páscoa); cadastrados como os outros, a escola pode remover um que não segue e as regras de agenda continuam as mesmas | `feriadosNacionais(ano)` (algoritmo de Meeus para a Páscoa) devolve os fixos e os móveis; Carnaval e Corpus Christi vêm como pontos facultativos, desmarcados na tela. O cadastro em lote reaproveita `criar` (tira as aulas do dia) e pula os passados e os já cobertos |
 | 39 | Interface minimalista: menos texto, cartões planos | Telas com subtítulos explicativos, dicas em quase todo campo, caixas de informação longas e cartões grandes com ícones cansavam e escondiam o que importa (números, nomes, ações), principalmente no celular | Páginas sem subtítulo (fica só o que é dado, como a data no Início); `Indicador` sem ícone (rótulo, número e um ponto no que pede ação), em grade de três no computador; descrições das janelas só quando dizem um estado (ex.: cadastro inativo); dicas só onde mudam o preenchimento (o exemplo vira `placeholder`); cartões sem sombra, bordas mais leves; ações do cabeçalho compactas no celular (o histórico de pagamentos vira ícone, com o nome para leitores de tela); `TituloDaSecao` recolhe feriados e horários no fim da agenda; a faixa de alertas só aparece quando há o que fazer |
+| 40 | Entrada de escolas mais firme: escola e coordenação numa gravação só, consulta do código e limites por IP; link de acesso da equipe | Criadas em duas gravações, uma falha no meio deixava o código preso a uma escola sem ninguém; o código em uso só aparecia depois de preencher tudo; as rotas públicas aceitavam cadastros sem limite; e a coordenação não tinha como mandar o acesso à equipe, nem quem dá aula em duas escolas entendia por que o link de uma abria a outra | `escolas.criarComCoordenacao` (escrita aninhada do Prisma, numa transação); `GET /api/escolas/disponibilidade` com pausa no front e só para códigos no formato certo (fechado o cadastro, responde 403 e não revela quais escolas existem); `LIMITES_DO_CADASTRO` com o mesmo limitador do login; na página Escola, o link `?escola=` com botão de copiar; no login, a pergunta "Sair e entrar na outra escola / Continuar na escola atual"; ajuda em ícones discretos (`Ajuda`, um botão que expande, ao lado do rótulo) no lugar de dicas longas sob os campos |
+| 41 | Produção numa imagem só (a API entrega o front construído), com segredos obrigatórios e sem dados de demonstração | O Nginx servindo o front, com o endereço da API fixo na configuração, complicava a hospedagem em serviços de contêiner, que dão um endereço interno diferente a cada serviço; o seed regravava as senhas públicas do README a cada reinício; o compose trazia segredos fixos e a porta do banco aberta; o segredo de exemplo passava em produção | [Dockerfile](../Dockerfile) na raiz em duas etapas (build do Vite → `/app/public`), com o Nginx só como proxy reverso na frente (`deploy/nginx`); `servirFront` (`middlewares/front.js`) com cache de um ano em `assets/`, `no-cache` no `index.html` e 404 em JSON para o que não existe; `compression`; CSP do helmet com `upgrade-insecure-requests` só quando `APP_URL` é https; em produção, a API recusa `JWT_SECRET` de exemplo ou com menos de 32 caracteres e exige `APP_URL` (em desenvolvimento, avisa ao iniciar); compose com segredos no `.env` da raiz, sem porta do MySQL e com `DADOS_DEMO` desligado; seed só cria o que falta; `npm run escola:criar` para a primeira escola (senha provisória mostrada uma vez) |
+| 42 | Login sem revelar quem existe, limite por pessoa, recibo nunca apagado e baixa num UPDATE só | A revisão de código apontou: sem a pessoa, o login respondia antes (sem o bcrypt) e o tempo revelava os usuários; o limite contava "usuário" e "e-mail" separados (10 tentativas em vez de 5); excluir aluno apagava mensalidades pagas, com recibos numerados já entregues; e dois envios da mesma baixa passavam pela conferência ao mesmo tempo | Comparação com o hash de uma senha aleatória quando a pessoa não existe (`hashParaComparar`); chave do limite pela pessoa encontrada (`escola#id`), também no "esqueci minha senha"; `excluir` recusa (409) aluno com mensalidade paga — fica inativo —, e a janela do aluno mostra o motivo; `mensalidades.pagar` grava só se ainda em aberto (UPDATE condicional), e o segundo envio recebe 409 |
+| 43 | Aviso de privacidade público (LGPD) e lint no front | O sistema guarda dados de alunos, muitos menores de idade, e não dizia o que guarda nem como pedir acesso ou exclusão; o front não passava por lint (regras dos hooks do React) | Página `/privacidade`, ligada no pé do login e do cadastro, com dados, finalidades, acesso por perfil, prazos e direitos (texto geral: a escola, controladora, deve revisá-lo); ESLint no `web/` com `react-hooks`, sem nenhum aviso (`--max-warnings 0`), no CI; os quatro efeitos que dependem de propósito só da URL ficam anotados com o motivo |
+| 44 | Produção na AWS: EC2 + Nginx + CloudFront, deploy pelo GitHub Actions via ECR e SSM, backup diário no S3 | A RFC (5.4) pede contêineres Docker em nuvem (AWS/Azure/GCP) publicados por CI/CD com GitHub Actions, Nginx como proxy reverso e nada de deploy manual por ssh/ftp; o RNF07, backup periódico; e a conta é do plano gratuito (US$ 100 em créditos) | Uma EC2 t3.micro em São Paulo com Docker (`deploy/aws/docker-compose.yml`: Nginx → app → MySQL com memória ajustada); CloudFront na frente para o HTTPS sem domínio próprio (firewall só com a lista de origem do CloudFront, e um cabeçalho secreto para só a distribuição do EMMOO passar pelo Nginx; `TRUST_PROXY=2`); um cache sem TTL para a API que inclui o `Authorization` (o CloudFront o tira dos GET sem isso); job `deploy` no CI: OIDC → papel `emmoo-github-deploy` (só ECR e SSM daquele servidor), imagem com a versão do commit, `disparar.sh` manda o servidor baixar os arquivos daquele commit e rodar `atualizar.sh` (segredos do Parameter Store, pull, up, espera o health); backup por timer do systemd (servidor 7 dias, S3 30 dias). MySQL no próprio servidor em vez do RDS para caber nos créditos |
 
 ## Rastreabilidade RFC → código
 
 | RFC | Onde está |
 |---|---|
 | RF01 — autenticação por papel | `modules/auth` (login por escola + usuário ou e-mail), `modules/usuarios` (a coordenação cria e edita acessos), `middlewares/auth.js`, `infra/security` |
-| Multi-tenant (várias escolas) | `modules/escolas`, `infra/*/…Repositories.js` → `paraEscola`, `container.js` → `servicosDaEscola`; front: `LoginPage.jsx`, `CadastroEscolaPage.jsx`, `UsuariosPage.jsx` |
+| Multi-tenant (várias escolas) | `modules/escolas` (`escola.service.js` → `disponibilidade`, `cadastrar`, `LIMITES_DO_CADASTRO`), `infra/*/…Repositories.js` → `paraEscola`, `escolas.criarComCoordenacao`, `container.js` → `servicosDaEscola`; front: `LoginPage.jsx` (link de outra escola), `CadastroEscolaPage.jsx` (`useDisponibilidade`), `EscolaPage.jsx` (`LinkDeAcesso`), `UsuariosPage.jsx`, `components/Ajuda.jsx` |
 | RF02 — cadastro de alunos | `modules/alunos` |
 | RF03 — cadastro de planos | `modules/planos` (cadastrar, editar e excluir plano sem alunos); front: `PlanosPage.jsx` |
 | RN01–RN03 — permissões por papel | `authorize(...)` nas rotas de `modules/*/*.routes.js` |

@@ -1,17 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { copiarTexto } from '../utils/copiar.js';
 import Icone from './Icone.jsx';
-
-/** Copia o texto: pela área de transferência do navegador e, se ela não estiver disponível, selecionando o campo. */
-async function copiarTexto(texto, campo) {
-  try {
-    await navigator.clipboard.writeText(texto);
-    return true;
-  } catch {
-    campo?.focus();
-    campo?.select();
-    return typeof document.execCommand === 'function' && document.execCommand('copy');
-  }
-}
 
 /**
  * QR Code do Pix e o "copia e cola", com o botão de copiar. No celular, quem paga copia o código e cola no app

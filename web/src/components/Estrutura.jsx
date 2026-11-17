@@ -318,6 +318,7 @@ export function Painel({
       document.body.classList.remove('com-painel');
       if (focoAnterior?.isConnected && focoAnterior !== document.body) focoAnterior.focus({ preventScroll: true });
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- uma vez, ao abrir a janela (e o desfazer ao fechar)
   }, []);
 
   // Teclado: Esc fecha e o Tab circula dentro da janela — a menos que haja uma confirmação por cima, que cuida disso.

@@ -85,6 +85,21 @@ export function createAuthService({
   const registrar = (...pares) => pares.forEach(([limitador, chave]) => chave && limitador.registrar(chave));
 
   /**
+   * Chave do limite por conta: a pessoa encontrada (escola + id), não o texto digitado — entrar pelo usuário ou pelo
+   * e-mail soma no mesmo contador. Sem pessoa, o texto (não há conta a proteger, mas a tentativa conta igual).
+   */
+  const chaveDaConta = (escola, usuario, codigo, identificador) =>
+    usuario ? `${escola.id}#${usuario.id}` : `${codigo}|${identificador}`;
+
+  /**
+   * Sem a pessoa (escola ou usuário inexistente), a senha é comparada assim mesmo, com o hash de uma senha aleatória
+   * de mesmo custo: o tempo de resposta não revela quais escolas e usuários existem. Gerado uma vez, na primeira vez.
+   */
+  let hashFicticio;
+  const hashParaComparar = (usuario) =>
+    usuario ? usuario.senhaHash : (hashFicticio ??= passwordHasher.hash(randomBytes(18).toString('base64url')));
+
+  /**
    * Sessão: token + usuário público (com a escola). Também usada ao cadastrar uma escola nova.
    * O token leva a versão da sessão do usuário: quando ela muda (ex.: acesso desativado), ele deixa de valer.
    */
@@ -154,11 +169,12 @@ export function createAuthService({
       if (!senha) erros.push({ campo: 'senha', mensagem: 'Informe a senha.' });
       assertValid(erros);
 
-      const conta = `${codigo}|${identificador}`;
-      garantirLiberado([limite.loginPorConta, conta], [limite.loginPorIp, ip]);
+      garantirLiberado([limite.loginPorIp, ip]);
       const { escola, usuario } = await encontrar(codigo, identificador);
-      const senhaConfere = usuario ? await passwordHasher.compare(senha, usuario.senhaHash) : false;
-      // Mesma mensagem para escola, usuário ou senha errados: não revela quais escolas ou usuários existem.
+      const conta = chaveDaConta(escola, usuario, codigo, identificador);
+      garantirLiberado([limite.loginPorConta, conta]);
+      const senhaConfere = (await passwordHasher.compare(senha, await hashParaComparar(usuario))) && Boolean(usuario);
+      // Mesma mensagem (e o mesmo tempo) para escola, usuário ou senha errados: não revela quem existe.
       if (!senhaConfere) {
         registrar([limite.loginPorConta, conta], [limite.loginPorIp, ip]);
         throw new UnauthorizedError('Escola, usuário ou senha inválidos.');
@@ -234,11 +250,12 @@ export function createAuthService({
       if (!identificador) erros.push({ campo: 'login', mensagem: 'Informe o usuário ou e-mail.' });
       assertValid(erros);
 
-      const conta = `${codigo}|${identificador}`;
-      garantirLiberado([limite.esqueciPorConta, conta], [limite.esqueciPorIp, ip]);
+      garantirLiberado([limite.esqueciPorIp, ip]);
+      const { escola, usuario } = await encontrar(codigo, identificador);
+      const conta = chaveDaConta(escola, usuario, codigo, identificador);
+      garantirLiberado([limite.esqueciPorConta, conta]);
       registrar([limite.esqueciPorConta, conta], [limite.esqueciPorIp, ip]);
 
-      const { escola, usuario } = await encontrar(codigo, identificador);
       if (escola && usuario && usuario.ativo !== false && usuario.email) {
         const instante = agora();
         const token = randomBytes(32).toString('base64url');

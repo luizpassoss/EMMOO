@@ -105,6 +105,84 @@ describe('CadastroEscolaPage', () => {
     expect(await screen.findByText('Cadastro de escolas desativado.')).toBeInTheDocument();
   });
 
+  describe('código de acesso conferido enquanto se digita', () => {
+    const EM_USO = 'Este código de escola já está em uso.';
+    beforeEach(() => {
+      api.get.mockImplementation(async (caminho) => {
+        if (caminho === '/escolas/configuracao') return { cadastroDeEscolas: true };
+        const codigo = new URLSearchParams(caminho.split('?')[1]).get('codigo');
+        return codigo === 'emmoo' ? { codigo, disponivel: false, mensagem: EM_USO } : { codigo, disponivel: true };
+      });
+    });
+    const campoCodigo = () => screen.getByLabelText('Código de acesso');
+
+    it('o código sugerido pelo nome já é conferido; em uso, o aviso aparece no campo', async () => {
+      renderizar();
+      await screen.findByLabelText('Nome da escola');
+      preencher('Nome da escola', 'Escola Sol');
+      await waitFor(() => expect(campoCodigo()).toHaveAccessibleDescription('Código disponível.'));
+      expect(api.get).toHaveBeenCalledWith('/escolas/disponibilidade?codigo=escola-sol');
+      expect(screen.getByText('Código disponível.', { selector: '.sr-only' })).toBeInTheDocument(); // anunciado
+
+      preencher('Código de acesso', ' EMMOO ');
+      await waitFor(() => expect(campoCodigo()).toHaveAccessibleDescription(EM_USO));
+      expect(campoCodigo()).toHaveAttribute('aria-invalid', 'true');
+      expect(api.get).toHaveBeenCalledWith('/escolas/disponibilidade?codigo=emmoo');
+    });
+
+    it('código ainda fora do formato não é consultado (o envio explica a regra)', async () => {
+      renderizar();
+      await screen.findByLabelText('Código de acesso');
+      preencher('Código de acesso', 'ab');
+      await new Promise((resolve) => setTimeout(resolve, 500)); // passada a pausa da consulta
+      expect(api.get).not.toHaveBeenCalledWith(expect.stringContaining('/escolas/disponibilidade'));
+      expect(campoCodigo()).not.toHaveAccessibleDescription();
+    });
+
+    it('o erro "já está em uso" do envio some quando o código muda', async () => {
+      api.post.mockRejectedValueOnce({ status: 409, message: EM_USO });
+      renderizar();
+      await screen.findByLabelText('Código de acesso');
+      fireEvent.click(screen.getByRole('button', { name: 'Cadastrar escola' }));
+      await waitFor(() => expect(campoCodigo()).toHaveAccessibleDescription(EM_USO));
+      preencher('Código de acesso', 'escola-lua');
+      expect(campoCodigo()).not.toHaveAttribute('aria-invalid');
+      await waitFor(() => expect(campoCodigo()).toHaveAccessibleDescription('Código disponível.'));
+    });
+
+    it('a resposta atrasada de um código anterior não vale para o atual', async () => {
+      let responderAntiga;
+      api.get.mockImplementation((caminho) => {
+        if (caminho === '/escolas/configuracao') return Promise.resolve({ cadastroDeEscolas: true });
+        if (caminho.endsWith('codigo=sol')) return new Promise((resolve) => (responderAntiga = resolve));
+        return Promise.resolve({ codigo: 'lua', disponivel: true });
+      });
+      renderizar();
+      await screen.findByLabelText('Código de acesso');
+      preencher('Código de acesso', 'sol');
+      await waitFor(() => expect(responderAntiga).toBeTypeOf('function'));
+      preencher('Código de acesso', 'lua');
+      await waitFor(() => expect(campoCodigo()).toHaveAccessibleDescription('Código disponível.'));
+      responderAntiga({ codigo: 'sol', disponivel: false, mensagem: EM_USO });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(campoCodigo()).toHaveAccessibleDescription('Código disponível.');
+    });
+  });
+
+  it('ícones de ajuda discretos explicam a escola, o código, o acesso e o usuário', async () => {
+    renderizar();
+    await screen.findByLabelText('Nome da escola');
+    const ajudas = screen.getAllByRole('button', { name: /^Ajuda: / }).map((botao) => botao.getAttribute('aria-label'));
+    expect(ajudas).toEqual(['Ajuda: Nome da escola', 'Ajuda: Código de acesso', 'Ajuda: Seu acesso', 'Ajuda: Usuário (opcional)']);
+    fireEvent.click(screen.getByRole('button', { name: 'Ajuda: Código de acesso' }));
+    expect(screen.getByText(/não pode ser alterado depois/)).toBeInTheDocument();
+    const outra = screen.getByRole('button', { name: 'Ajuda: Seu acesso' });
+    fireEvent.pointerDown(outra); // como no navegador: o toque em outro lugar fecha a anterior
+    fireEvent.click(outra);
+    expect(screen.queryByText(/não pode ser alterado depois/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Você entra como coordenação/)).toBeInTheDocument();
+  });
+
   it('quem já está autenticado vai para o início', () => {
     renderizar({ autenticado: true, entrar: vi.fn() });
     expect(screen.getByText('Início')).toBeInTheDocument();

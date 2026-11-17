@@ -1,5 +1,8 @@
-# Ambiente completo: MySQL + API + Web (Nginx).
+# Ambiente completo, como em produção: Nginx (proxy reverso) → EMMOO (API e front, do Dockerfile da raiz) → MySQL.
+# Na AWS, o mesmo desenho roda com a imagem do ECR (deploy/aws/docker-compose.yml), atrás do CloudFront.
+# Antes da primeira vez: copie .env.example para .env (nesta pasta) e preencha os segredos.
 # Uso: docker compose up --build   →   http://localhost:8080
+# Primeira escola (com o cadastro público fechado): docker compose exec app npm run escola:criar -- --help (ver README)
 services:
   db:
     image: mysql:8.0
@@ -7,49 +10,46 @@ services:
     environment:
       MYSQL_DATABASE: emmoo
       MYSQL_USER: emmoo
-      MYSQL_PASSWORD: emmoo
-      MYSQL_ROOT_PASSWORD: root
-    ports:
-      - "3306:3306"
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD no arquivo .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD no arquivo .env}
+    # Sem porta publicada: o banco só é acessível pelo app, na rede interna do Docker.
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 10s
       timeout: 5s
       retries: 10
 
-  api:
-    build: ./api
+  app:
+    build: .
     restart: unless-stopped
     environment:
-      NODE_ENV: production
-      TZ: America/Sao_Paulo # "hoje" da escola (ex.: cancelar aulas futuras ao inativar aluno)
-      PORT: 3333
       DB_DRIVER: mysql
-      DATABASE_URL: mysql://emmoo:emmoo@db:3306/emmoo
-      JWT_SECRET: troque-este-segredo-em-producao
-      CADASTRO_ESCOLAS: fechado # "aberto" libera o cadastro público de escolas novas
-      CORS_ORIGIN: http://localhost:8080
-      APP_URL: http://localhost:8080 # endereço do front nos links de e-mail ("esqueci minha senha")
-      # A API fica atrás do nginx (container web): o IP de quem acessa vem do X-Forwarded-For, para o limite de
-      # tentativas de login. Só a rede interna é de confiança — quem chama a porta 3333 de fora não forja o endereço.
-      TRUST_PROXY: loopback, uniquelocal
-    # Sincroniza o schema, cria os dados iniciais e sobe a API.
-    command: sh -c "npx prisma db push --skip-generate && node prisma/seed.js && node src/server.js"
+      DATABASE_URL: mysql://emmoo:${MYSQL_PASSWORD}@db:3306/emmoo
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no arquivo .env}
+      APP_URL: ${APP_URL:-http://localhost:8080} # endereço público: links dos e-mails e HTTPS
+      CADASTRO_ESCOLAS: ${CADASTRO_ESCOLAS:-fechado} # "aberto" libera o cadastro público de escolas novas
+      SMTP_URL: ${SMTP_URL:-} # e-mail dos alertas e do "esqueci minha senha" (opcional)
+      EMAIL_REMETENTE: ${EMAIL_REMETENTE:-}
+      # Atrás do Nginx: o IP de quem acessa vem do X-Forwarded-For que ele envia (limite de tentativas de login).
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      DADOS_DEMO: ${DADOS_DEMO:-nao} # "sim" cria a escola de demonstração (senhas públicas do README)
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "3333:3333"
 
-  web:
-    build: ./web
+  nginx:
+    image: nginx:1.27-alpine
     restart: unless-stopped
-    depends_on:
-      - api
     ports:
-      - "8080:80"
+      - "${PORTA:-8080}:80"
+    environment:
+      ORIGEM_SEGREDO: "" # localmente, sem CloudFront na frente: nenhum cabeçalho exigido
+    volumes:
+      - ./deploy/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      - app
 
 volumes:
   db_data:

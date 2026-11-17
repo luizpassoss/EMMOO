@@ -1,11 +1,13 @@
 import { cloneElement, useId } from 'react';
+import Ajuda from './Ajuda.jsx';
 
 /**
  * Rótulo + controle de formulário + dica ou mensagem de erro do campo.
  * A dica e o erro ficam fora do rótulo e são ligados ao controle por aria-describedby: leitores de tela
  * anunciam "Nome" como nome do campo e o texto embaixo como descrição. Com erro, ele substitui a dica.
+ * `ajuda` põe um ícone discreto ao lado do rótulo, com a explicação num balão (o que não cabe numa dica curta).
  */
-export default function Campo({ rotulo, erro, dica, children }) {
+export default function Campo({ rotulo, erro, dica, ajuda, children }) {
   const id = useId();
   const idErro = `${id}-erro`;
   const idDica = `${id}-dica`;
@@ -15,9 +17,17 @@ export default function Campo({ rotulo, erro, dica, children }) {
     'aria-invalid': erro ? true : undefined,
     'aria-describedby': descricao,
   });
+  const rotuloDoCampo = <label htmlFor={id}>{rotulo}</label>;
   return (
     <div className="campo">
-      <label htmlFor={id}>{rotulo}</label>
+      {ajuda ? (
+        <div className="campo-rotulo">
+          {rotuloDoCampo}
+          <Ajuda sobre={rotulo}>{ajuda}</Ajuda>
+        </div>
+      ) : (
+        rotuloDoCampo
+      )}
       {controle}
       {erro ? (
         <small id={idErro} className="erro-campo">

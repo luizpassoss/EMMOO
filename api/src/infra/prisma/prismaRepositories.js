@@ -135,6 +135,25 @@ export function createPrismaRepositories(prisma = new PrismaClient()) {
         () => prisma.escola.create({ data: { ...dados, codigo: normalizar(dados.codigo) } }),
         'Este código de escola já está em uso.',
       ),
+    /**
+     * Escola nova com quem a coordena, numa gravação só (o Prisma faz a escrita aninhada numa transação):
+     * ou as duas existem, ou nenhuma — uma falha no meio não deixa o código preso a uma escola sem ninguém.
+     */
+    criarComCoordenacao: async ({ escola, coordenacao }) => {
+      const { usuarios, ...criada } = await comConflito(
+        () =>
+          prisma.escola.create({
+            data: {
+              ...escola,
+              codigo: normalizar(escola.codigo),
+              usuarios: { create: normalizarUsuario({ ...coordenacao, login: coordenacao.login ?? null }) },
+            },
+            include: { usuarios: true },
+          }),
+        'Este código de escola já está em uso.',
+      );
+      return { escola: criada, coordenacao: usuarios[0] };
+    },
     /** Dados da escola (nome e Pix). O código não muda: é com ele que todos entram no sistema. */
     update: async (id, dados) => {
       const alteracoes = { ...dados };
@@ -307,6 +326,17 @@ export function createPrismaRepositories(prisma = new PrismaClient()) {
             ),
           ),
         update: async (id, dados) => paraMensalidade(await atualizar('mensalidade', id, dadosDeMensalidade(dados))),
+        /**
+         * Baixa num UPDATE só, condicionado a "ainda em aberto": dois envios ao mesmo tempo (clique duplo, duas
+         * pessoas) não registram o pagamento duas vezes — o segundo não encontra nada e recebe null.
+         */
+        pagar: async (id, { dataPagamento, formaPagamento }) => {
+          const { count } = await prisma.mensalidade.updateMany({
+            where: daEscola({ id, status: { in: EM_ABERTO } }),
+            data: dadosDeMensalidade({ status: 'paga', dataPagamento, formaPagamento }),
+          });
+          return count ? paraMensalidade(await prisma.mensalidade.findFirst({ where: daEscola({ id }) })) : null;
+        },
         /**
          * RF15 — dá à mensalidade o próximo número de recibo da escola, se ainda não tem; devolve a mensalidade.
          * Duas baixas ao mesmo tempo podem calcular o mesmo número: o índice único (escola, número) barra a segunda,

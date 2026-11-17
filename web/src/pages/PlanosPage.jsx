@@ -91,6 +91,7 @@ export default function PlanosPage() {
       setFormInicial(dadosDoFormulario(plano));
     }
     else fecharPainel(); // link para um plano que não existe
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só a URL e o carregamento: recarregar a lista não pode apagar o que se digita
   }, [painel, carregando]);
 
   function alterarCampo(evento) {

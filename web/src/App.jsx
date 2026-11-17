@@ -14,6 +14,7 @@ import MensalidadesPage from './pages/MensalidadesPage.jsx';
 import PagamentosPage from './pages/PagamentosPage.jsx';
 import PerfilPage from './pages/PerfilPage.jsx';
 import PlanosPage from './pages/PlanosPage.jsx';
+import PrivacidadePage from './pages/PrivacidadePage.jsx';
 import RecuperarSenhaPage from './pages/RecuperarSenhaPage.jsx';
 import RedefinirSenhaPage from './pages/RedefinirSenhaPage.jsx';
 import RelatoriosPage from './pages/RelatoriosPage.jsx';
@@ -32,6 +33,7 @@ export default function App() {
           {/* "Esqueci minha senha": pedir o link por e-mail e criar a senha nova com ele (sem sessão). */}
           <Route path="/recuperar-senha" element={<RecuperarSenhaPage />} />
           <Route path="/redefinir-senha" element={<RedefinirSenhaPage />} />
+          <Route path="/privacidade" element={<PrivacidadePage />} />
           <Route
             path="/"
             element={

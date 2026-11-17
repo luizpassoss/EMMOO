@@ -111,6 +111,43 @@ describe('limite de tentativas de login', () => {
     assert.ok(await auth.login({ escola: 'emmoo', login: 'luiz', senha: 'Luiz123' }));
   });
 
+  it('pelo usuário ou pelo e-mail, os erros da mesma pessoa somam: 3 + 2 bloqueiam na sexta', async () => {
+    const auth = criar();
+    for (let i = 0; i < 3; i += 1) {
+      await assert.rejects(auth.login({ escola: 'emmoo', login: 'luiz', senha: 'errada' }, { ip: '10.0.0.1' }), UnauthorizedError);
+    }
+    for (let i = 0; i < 2; i += 1) {
+      await assert.rejects(
+        auth.login({ escola: 'emmoo', login: 'Luiz@Emmoo.com.br', senha: 'errada' }, { ip: '10.0.0.2' }),
+        UnauthorizedError,
+      );
+    }
+    await assert.rejects(auth.login({ escola: 'emmoo', login: 'luiz@emmoo.com.br', senha: 'Luiz123' }, { ip: '10.0.0.3' }), {
+      name: TooManyRequestsError.name,
+    });
+    await assert.rejects(auth.login({ escola: 'emmoo', login: 'luiz', senha: 'Luiz123' }, { ip: '10.0.0.3' }), TooManyRequestsError);
+  });
+
+  it('sem a pessoa (escola ou usuário inexistente), a senha é comparada assim mesmo: o tempo não revela quem existe', async () => {
+    const chamadas = { hash: 0, compare: 0 };
+    const hasher = {
+      hash: async (senha) => {
+        chamadas.hash += 1;
+        return hasherFake.hash(senha);
+      },
+      compare: async (senha, hash) => {
+        chamadas.compare += 1;
+        return hasherFake.compare(senha, hash);
+      },
+    };
+    const auth = criar({ passwordHasher: hasher });
+    await assert.rejects(auth.login({ escola: 'emmoo', login: 'ninguem', senha: 'x' }), UnauthorizedError);
+    await assert.rejects(auth.login({ escola: 'nao-existe', login: 'admin', senha: 'admin' }), UnauthorizedError);
+    assert.deepEqual(chamadas, { hash: 1, compare: 2 }); // o hash de mentira é gerado uma vez só
+    await assert.rejects(auth.login({ escola: 'emmoo', login: 'luiz', senha: 'errada' }), UnauthorizedError);
+    assert.deepEqual(chamadas, { hash: 1, compare: 3 });
+  });
+
   it('30 erros do mesmo endereço (contas diferentes) bloqueiam o endereço', async () => {
     const auth = criar();
     for (let i = 0; i < 30; i += 1) {
@@ -168,6 +205,15 @@ describe('esqueci minha senha (link por e-mail)', () => {
     await assert.rejects(auth.esqueciSenha({ escola: 'emmoo', login: 'luiz' }, { ip: '2.2.2.2' }), TooManyRequestsError);
     for (let i = 0; i < 7; i += 1) await auth.esqueciSenha({ escola: 'emmoo', login: `x${i}` }, { ip: '1.1.1.1' });
     await assert.rejects(auth.esqueciSenha({ escola: 'emmoo', login: 'admin' }, { ip: '1.1.1.1' }), TooManyRequestsError);
+  });
+
+  it('pelo usuário ou pelo e-mail, os pedidos da mesma pessoa somam no mesmo limite', async () => {
+    const auth = criar();
+    await auth.esqueciSenha({ escola: 'emmoo', login: 'luiz' }, { ip: '1.1.1.1' });
+    await auth.esqueciSenha({ escola: 'emmoo', login: 'luiz@emmoo.com.br' }, { ip: '2.2.2.2' });
+    await auth.esqueciSenha({ escola: 'emmoo', login: 'LUIZ' }, { ip: '3.3.3.3' });
+    await assert.rejects(auth.esqueciSenha({ escola: 'emmoo', login: 'luiz@emmoo.com.br' }, { ip: '4.4.4.4' }), TooManyRequestsError);
+    assert.equal(enviados.length, 3);
   });
 
   it('redefine com o link: senha nova, sessões encerradas, link usado uma vez só', async () => {

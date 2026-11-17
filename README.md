@@ -22,7 +22,7 @@ Projeto de Portfólio — Engenharia de Software, Católica SC · Linha **Web Ap
 | Segurança | JWT + bcrypt, Helmet, CORS |
 | Documentos e e-mail | PDFKit (recibo e relatório mensal em PDF) e Nodemailer (alertas de pagamento por SMTP, opcional) |
 | Testes | `node:test` (API) e Vitest + Testing Library (Web) |
-| DevOps | Docker, Docker Compose, Nginx, GitHub Actions (CI) |
+| DevOps | Docker, Docker Compose, Nginx (proxy reverso), GitHub Actions (CI/CD), AWS (EC2, ECR, CloudFront, SSM, S3) |
 
 ## Estrutura
 
@@ -47,7 +47,8 @@ emmoo-gestao/
 ├── scripts/dev.mjs       # "npm run dev" na raiz: sobe API e front juntos
 ├── package.json          # atalhos da raiz: setup, dev e test
 ├── docs/arquitetura.md   # arquitetura, decisões (ADRs) e rastreabilidade RFC → código
-├── docker-compose.yml    # MySQL + API + Web
+├── Dockerfile            # imagem única de produção: a API entrega o front construído
+├── docker-compose.yml    # MySQL + essa imagem (segredos no .env da raiz; ver .env.example)
 └── .github/              # CI, templates de Pull Request e Issues
 ```
 
@@ -101,13 +102,27 @@ Depois de mudar o banco, reinicie a API (`Ctrl+C` e `npm run dev`).
 Se algo estiver errado, a API não sobe e diz o motivo: MySQL desligado, banco não importado, cliente do Prisma
 não gerado ou porta 3333 já em uso (API aberta em outro terminal).
 
-### Banco com Docker
+### Com Docker (sistema completo, como em produção)
+
+Uma imagem só ([Dockerfile](Dockerfile) na raiz): o front é construído e entregue pela própria API, na mesma origem.
+O [docker-compose.yml](docker-compose.yml) sobe essa imagem com o MySQL (sem porta do banco aberta para fora).
 
 ```powershell
+copy .env.example .env    # e preencha JWT_SECRET, MYSQL_PASSWORD e MYSQL_ROOT_PASSWORD
 docker compose up --build
 ```
 
-Acesse **http://localhost:8080**. O schema é criado automaticamente e os usuários de demonstração são cadastrados.
+Acesse **http://localhost:8080**. As tabelas são criadas automaticamente ao iniciar. Para testar com os usuários de
+demonstração, use `DADOS_DEMO=sim` no `.env` (nunca em produção: as senhas deles estão neste README). Em produção,
+crie a escola e quem a coordena com:
+
+```powershell
+docker compose exec app npm run escola:criar -- --nome "Escola de Música EMMOO" --codigo emmoo --responsavel "Lucimara" --email lucimara@escola.com.br --login admin
+```
+
+Sem `--senha`, o comando gera uma senha provisória e a mostra uma vez; a pessoa troca no primeiro acesso, em
+**Minha conta**. Em produção, a API recusa iniciar sem um `JWT_SECRET` próprio (32 caracteres ou mais, diferente dos
+exemplos deste repositório) e sem `APP_URL`.
 
 ### Banco MySQL já instalado (sem importar o .sql)
 
@@ -124,12 +139,17 @@ Todos na escola de código **`emmoo`** (campo "Escola" do login — depois do pr
 | Professor (Luiz) | `luiz` (ou `luiz@emmoo.com.br`) | `Luiz123` |
 | Responsável (Mary) | `mary@emmoo.com.br` | `emmoo123` |
 
-> Senhas fracas, apenas para desenvolvimento. Troque as senhas e o `JWT_SECRET` antes de qualquer uso real.
+> Senhas fracas e públicas, apenas para desenvolvimento. O seed só cria os usuários que faltam: rodá-lo de novo não
+> devolve a senha de ninguém a estas. Em produção, não use o seed — crie a escola com `npm run escola:criar` (acima).
+> Com o `JWT_SECRET` de exemplo, a API avisa ao iniciar: não a exponha na internet assim (ex.: por um túnel).
 
 ### Várias escolas (multi-tenant)
 
 - **Escola nova:** na tela de login, **"Cadastre a sua"** (`/cadastro`) cria a escola e o acesso de quem vai coordená-la,
-  e já entra. O código escolhido (ex.: `escola-sol`) é o que todos daquela escola digitam no login.
+  e já entra. O código escolhido (ex.: `escola-sol`) é o que todos daquela escola digitam no login. Enquanto se digita,
+  o cadastro confere se o código está livre ("Código disponível." ou "já está em uso", sem precisar enviar), e ícones de
+  ajuda discretos (**?**) ao lado de alguns campos explicam o que cada um faz. A escola e a coordenação são gravadas
+  juntas: se algo falhar no meio, nenhuma das duas fica, e o código não fica preso.
 - **Equipe:** a coordenação dá acesso a professores, responsáveis e outras coordenadoras em **Usuários** — e tira:
   **Desativar acesso** encerra na hora a sessão aberta da pessoa e impede novos logins (dá para reativar depois).
   Trocar o perfil de alguém ou redefinir a senha dessa pessoa também encerra as sessões dela.
@@ -140,9 +160,14 @@ Todos na escola de código **`emmoo`** (campo "Escola" do login — depois do pr
   cadastrados ficam de fora.
 - **Isolamento:** o token carrega a escola, e todas as consultas são filtradas por ela — uma escola não vê, não edita e
   não exclui dados de outra, nem pelo id. O mesmo usuário (`admin`) pode existir em cada escola, com senhas diferentes.
-- **Link direto:** `http://localhost:5173/login?escola=emmoo` já abre o login com a escola preenchida.
+- **Link de acesso da equipe:** em **Escola**, a coordenação copia o link (ex.: `http://localhost:5173/login?escola=emmoo`)
+  e o envia a professores e responsáveis: ele já abre o login com a escola escolhida. Quem está com uma sessão aberta
+  numa escola e abre o link de outra (ex.: professor que dá aula em duas) recebe a pergunta: **Sair e entrar na outra
+  escola** ou **Continuar na escola atual**.
 - **Cadastro aberto ou fechado:** `CADASTRO_ESCOLAS=aberto|fechado` no `api/.env` (padrão: aberto em desenvolvimento,
-  fechado em produção). Fechado, o link some do login e a API recusa novos cadastros (403).
+  fechado em produção). Fechado, o link some do login e a API recusa novos cadastros e a consulta do código (403).
+  Aberto, cada endereço (IP) pode cadastrar até 5 escolas por hora e consultar códigos até 60 vezes a cada 15 minutos;
+  passou disso, a API responde 429 dizendo quanto esperar.
 
 ### O que cada perfil faz
 
@@ -205,10 +230,18 @@ No `api/.env`:
   recebe no e-mail cadastrado um link que vale por 1 hora e uma vez só (o banco guarda só o hash). A resposta é a
   mesma exista ou não a pessoa. `APP_URL` define o endereço do front usado no link (padrão: a primeira origem de
   `CORS_ORIGIN`). Sem e-mail configurado, a tela orienta a pedir uma senha nova à coordenação.
-- **Limite de tentativas:** 5 senhas erradas na mesma conta (ou 30 no mesmo endereço) em 15 minutos bloqueiam por um
-  tempo, com a mensagem de quanto esperar; o mesmo vale para os pedidos de redefinição. Com a API atrás de um proxy
-  (o do Vite, nginx, túnel), defina `TRUST_PROXY` (ex.: `loopback`) para o endereço de quem acessa vir do
-  `X-Forwarded-For` — senão, todos contam como o próprio proxy.
+- **Limite de tentativas:** 5 senhas erradas na mesma conta — pelo usuário ou pelo e-mail, somados — (ou 30 no mesmo
+  endereço) em 15 minutos bloqueiam por um tempo, com a mensagem de quanto esperar; o mesmo vale para os pedidos de
+  redefinição. Escola ou usuário inexistente leva o mesmo tempo para responder que uma senha errada (não revela quem
+  existe). Com a API atrás de um proxy (o do Vite, um proxy reverso, túnel ou serviço de hospedagem), defina
+  `TRUST_PROXY` (ex.: `loopback` ou `1`) para o endereço de quem acessa vir do `X-Forwarded-For` — senão, todos
+  contam como o próprio proxy.
+- **Recibos nunca somem:** aluno com mensalidade paga não pode ser excluído (fica inativo); a baixa de pagamento é
+  gravada só se a mensalidade ainda estiver em aberto, então um clique duplo não registra o pagamento duas vezes.
+- **Aviso de privacidade (LGPD):** a página `/privacidade`, ligada no pé do login e do cadastro, diz o que o sistema
+  guarda, para quê, quem vê, por quanto tempo e como pedir acesso, correção ou exclusão. O texto é geral: a escola, que
+  é a controladora dos dados, deve revisá-lo com quem cuida da parte jurídica e colher o consentimento dos
+  responsáveis pelos alunos menores de idade na matrícula.
 
 ### No celular
 
@@ -261,6 +294,7 @@ npm run lint
 cd ..\web
 npm test
 npm run test:coverage   # falha se a cobertura ficar abaixo de 25%
+npm run lint            # inclui as regras dos hooks do React; falha com qualquer aviso
 ```
 
 As metas seguem a direção da linha Web App: **75% no backend e 25% no frontend**.
@@ -271,7 +305,8 @@ As metas seguem a direção da linha Web App: **75% no backend e 25% no frontend
 |---|---|---|---|
 | GET | `/api/health` | público | Saúde do serviço (monitoramento) |
 | GET | `/api/escolas/configuracao` | público | Informa se o cadastro de escolas está aberto (`cadastroDeEscolas`) e se o "esqueci minha senha" por e-mail está disponível (`recuperacaoDeSenha`) |
-| POST | `/api/escolas` | público | Cadastra escola nova (`nomeEscola`, `codigo`) e quem a coordena (`nome`, `email`, `login` opcional, `senha`); devolve a sessão. Código em uso → 409; cadastro fechado → 403 |
+| GET | `/api/escolas/disponibilidade?codigo=` | público | O código pode ser usado? `{ codigo, disponivel, mensagem? }` (formato inválido ou em uso vêm com `disponivel: false` e o motivo). Cadastro fechado → 403; mais de 60 consultas do mesmo endereço em 15 minutos → 429 |
+| POST | `/api/escolas` | público | Cadastra escola nova (`nomeEscola`, `codigo`) e quem a coordena (`nome`, `email`, `login` opcional, `senha`), numa gravação só; devolve a sessão. Código em uso → 409; cadastro fechado → 403; mais de 5 cadastros do mesmo endereço em 1 hora → 429 |
 | POST | `/api/auth/login` | público | Autenticação (RF01): `{ escola, login, senha }` — `login` aceita o usuário ou o e-mail; retorna token JWT com a escola |
 | GET | `/api/auth/me` | autenticado | Perfil do usuário logado, com a escola |
 | PUT | `/api/auth/senha` | autenticado | Troca a própria senha (`senhaAtual`, `novaSenha`): encerra as outras sessões e devolve a sessão nova; 5 senhas atuais erradas em 15 min → 429 |
@@ -338,6 +373,37 @@ Toda rota autenticada age só na escola do token: um id de outra escola responde
 Erros seguem o formato `{ "error": { "code", "message", "details" } }`. Datas trafegam como `AAAA-MM-DD` e horas como `HH:MM`;
 períodos de consulta têm no máximo 62 dias.
 
+## Produção na AWS
+
+**Endereço:** https://d1uyezscfz84pc.cloudfront.net (escola `emmoo`).
+
+```
+Navegador ──HTTPS──► CloudFront ──► EC2 em São Paulo: Nginx (proxy reverso) ──► contêiner EMMOO (API + front) ──► MySQL
+                                                                                         backup diário ──► S3
+```
+
+- **Deploy contínuo (RFC 5.4):** a cada push na `main`, o GitHub Actions roda lint e testes; passando, constrói a imagem,
+  envia ao ECR e manda o servidor se atualizar pelo SSM ([deploy/aws/disparar.sh](deploy/aws/disparar.sh) →
+  [deploy/aws/atualizar.sh](deploy/aws/atualizar.sh)). Sem SSH (a porta 22 nem existe no firewall) e sem chave da AWS
+  no GitHub: o GitHub se identifica por OIDC e recebe credenciais temporárias de um papel que só envia imagem e
+  atualiza aquele servidor. Ao final, o job confere `/api/health` pelo endereço público.
+- **HTTPS:** o CloudFront entrega o certificado; o Nginx só aceita o CloudFront (firewall) e, dentro dele, só a
+  distribuição do EMMOO (cabeçalho secreto). Arquivos de `assets/` ficam em cache no CloudFront; a API, nunca.
+- **Segredos:** `JWT_SECRET`, senhas do MySQL e o segredo do CloudFront ficam no Parameter Store (cifrados) e são
+  escritos no `.env` do servidor a cada deploy. Nenhum está no repositório.
+- **Backup (RNF07):** todo dia às 3h, `mysqldump` comprimido no servidor (7 dias) e no S3 (30 dias). Restaurar está
+  descrito em [deploy/aws/backup.sh](deploy/aws/backup.sh).
+- **Primeira escola:** criada com `npm run escola:criar` dentro do contêiner (senha provisória, trocada no primeiro
+  acesso). Para mais escolas: `docker compose exec app npm run escola:criar -- ...` no servidor.
+- **Acesso ao servidor:** console da AWS → EC2 → `emmoo-producao` → Conectar → Session Manager (sem senha nem chave).
+  Logs: `cd /opt/emmoo && sudo docker compose logs -f app`.
+- **Custo:** máquina t3.micro, disco de 12 GB, IP fixo e CloudFront — cerca de US$ 17–19 por mês, pagos com os
+  créditos do plano gratuito da AWS (que não cobra o cartão). Quando os créditos ou o plano acabarem, é preciso passar
+  para o plano pago para o sistema continuar no ar.
+- **Recursos** (sa-east-1, etiqueta `Projeto=emmoo`): EC2 `emmoo-producao`, IP `emmoo-ip`, grupo `emmoo-web`,
+  ECR `emmoo`, bucket `emmoo-backups-740997306124`, parâmetros `/emmoo/*`, papéis `emmoo-ec2` e
+  `emmoo-github-deploy`, distribuição CloudFront `E27WMM60LTHQNS`. Ver ADR 44.
+
 ## Roadmap (marcos da RFC)
 
 - [x] Arquitetura em camadas, CI, Docker e schema do banco (DER completo)
@@ -359,7 +425,10 @@ períodos de consulta têm no máximo 62 dias.
 - [x] Painel por perfil, histórico do aluno e relatório mensal na tela e em PDF (RF13–RF15)
 - [x] Dia a dia da escola: ajuste e cancelamento de cobrança, recibo numerado, Pix da escola com QR, remarcação de aula,
   alunos para agendar, troca e recuperação de senha com limite de tentativas, planilhas CSV e feriados nacionais
-- [ ] Deploy em nuvem com CI/CD e observabilidade
+- [x] Pronto para produção: imagem única (API + front), segredos obrigatórios, sem dados de demonstração, primeira
+  escola por comando, aviso de privacidade e lint também no front
+- [x] Deploy em nuvem (AWS) com CI/CD pelo GitHub Actions, Nginx como proxy reverso, HTTPS e backup diário
+- [ ] Observabilidade: logs estruturados, métricas e alertas de disponibilidade
 
 ## Documentação
 

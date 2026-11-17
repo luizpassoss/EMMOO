@@ -47,6 +47,14 @@ export function createMemoryRepositories() {
       // Mesmos padrões do banco: a escola começa sem Pix configurado.
       return escolasStore.inserir({ pixTipo: null, pixChave: null, pixRecebedor: null, pixCidade: null, ...dados, codigo });
     },
+    /**
+     * Escola nova com quem a coordena. No banco, é uma gravação só; aqui, o código é conferido antes de gravar
+     * qualquer coisa, e o usuário não tem com quem conflitar numa escola que acabou de nascer.
+     */
+    async criarComCoordenacao({ escola, coordenacao }) {
+      const criada = await escolas.create(escola);
+      return { escola: criada, coordenacao: await paraEscola(criada.id).usuarios.create(coordenacao) };
+    },
     /** Dados da escola (nome e Pix). O código não muda: é com ele que todos entram no sistema. */
     async update(id, dados) {
       const alteracoes = { ...dados };
@@ -335,6 +343,15 @@ export function createMemoryRepositories() {
         },
         async update(id, dados) {
           return mensalidadesDaEscola.atualizar(id, dados);
+        },
+        /**
+         * Baixa: marca como paga só se ainda está em aberto (pendente ou atrasada) — conferir e gravar de uma vez,
+         * como o UPDATE condicional do banco. Devolve a mensalidade paga, ou null se ela já não estava em aberto.
+         */
+        async pagar(id, { dataPagamento, formaPagamento }) {
+          const atual = mensalidadesDaEscola.buscar(id);
+          if (!atual || !EM_ABERTO.includes(atual.status)) return null;
+          return mensalidadesDaEscola.atualizar(id, { status: 'paga', dataPagamento, formaPagamento });
         },
         /** RF15 — dá à mensalidade o próximo número de recibo da escola, se ainda não tem; devolve a mensalidade. */
         async registrarNumeroRecibo(id) {

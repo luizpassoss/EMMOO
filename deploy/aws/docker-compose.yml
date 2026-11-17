@@ -1,0 +1,54 @@
+# Produção na AWS (EC2 em sa-east-1): Nginx (proxy reverso) → EMMOO (imagem do ECR) → MySQL.
+# Na frente de tudo, o CloudFront dá o HTTPS. Este arquivo chega ao servidor pelo deploy do GitHub Actions, junto
+# com o atualizar.sh, que escreve o .env a partir do Parameter Store (os segredos nunca ficam no repositório).
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      ORIGEM_SEGREDO: ${ORIGEM_SEGREDO:?}
+    volumes:
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      - app
+
+  app:
+    image: ${IMAGEM:?}
+    restart: always
+    environment:
+      DB_DRIVER: mysql
+      DATABASE_URL: mysql://emmoo:${MYSQL_PASSWORD:?}@db:3306/emmoo
+      JWT_SECRET: ${JWT_SECRET:?}
+      APP_URL: ${APP_URL:?}
+      CADASTRO_ESCOLAS: fechado
+      # Navegador → CloudFront → Nginx → app: confia nos dois saltos, e o IP de quem acessa (limite de tentativas)
+      # é o que o CloudFront viu. Um X-Forwarded-For forjado pelo navegador fica antes e é ignorado.
+      TRUST_PROXY: "2"
+      SMTP_URL: ${SMTP_URL:-}
+      EMAIL_REMETENTE: ${EMAIL_REMETENTE:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.0
+    restart: always
+    # Servidor com 1 GB de memória: sem performance_schema e com cache menor (o banco de uma escola é pequeno).
+    command: ["--performance-schema=OFF", "--innodb-buffer-pool-size=64M", "--max-connections=30", "--skip-name-resolve"]
+    environment:
+      MYSQL_DATABASE: emmoo
+      MYSQL_USER: emmoo
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  db_data:

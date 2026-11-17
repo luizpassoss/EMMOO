@@ -81,6 +81,7 @@ export default function UsuariosPage() {
       setFormInicial(dadosDoFormulario(usuario));
     }
     else fecharPainel(); // link para alguém que não existe (ou de outra escola)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só a URL e o carregamento: recarregar a lista não pode apagar o que se digita
   }, [painel, carregando]);
 
   function alterarCampo(evento) {

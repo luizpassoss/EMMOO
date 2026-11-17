@@ -217,6 +217,19 @@ describe('MensalidadeService (RF10–RF12, RF15)', () => {
     await assert.rejects(criar().registrarPagamento('x', {}), ValidationError);
   });
 
+  it('dois envios da mesma baixa ao mesmo tempo (clique duplo, duas pessoas): só um registra', async () => {
+    await criar().gerar({ mes: '2026-10' });
+    const servico = criar();
+    const resultados = await Promise.allSettled([
+      servico.registrarPagamento(1, { dataPagamento: '2026-10-06', formaPagamento: 'pix' }),
+      servico.registrarPagamento(1, { dataPagamento: '2026-10-07', formaPagamento: 'dinheiro' }),
+    ]);
+    assert.deepEqual(resultados.map((resultado) => resultado.status), ['fulfilled', 'rejected']);
+    assert.equal(resultados[1].reason.message, 'Esta mensalidade já está paga.');
+    const gravada = await repos.mensalidades.findById(1);
+    assert.deepEqual([gravada.dataPagamento, gravada.formaPagamento, gravada.numeroRecibo], ['2026-10-06', 'pix', 1]);
+  });
+
   it('a lista do mês começa pelo que pede ação: atrasadas, pendentes e, por fim, as pagas', async () => {
     await criar().gerar({ mes: '2026-10' });
     const zeca = await repos.alunos.create({ nome: 'Zeca', status: 'ativo', planoId: 1, usuarioRespId: null });

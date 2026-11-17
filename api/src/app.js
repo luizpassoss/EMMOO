@@ -1,8 +1,10 @@
+import compression from 'compression';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { createAuthMiddleware } from './middlewares/auth.js';
 import { createErrorHandler, notFound } from './middlewares/errorHandler.js';
+import { servirFront } from './middlewares/front.js';
 import { createAlunoController } from './modules/alunos/aluno.controller.js';
 import { alunoRoutes } from './modules/alunos/aluno.routes.js';
 import { createAulaController } from './modules/aulas/aula.controller.js';
@@ -34,6 +36,7 @@ import { usuarioRoutes } from './modules/usuarios/usuario.routes.js';
 /**
  * Monta a aplicação Express (sem abrir porta), o que permite testá-la de ponta a ponta.
  * `auth` e `escolas` são globais; o resto usa os serviços da escola do usuário (`req.servicos`).
+ * Com `pastaDoFront` (produção), entrega também o front construído, na mesma origem da API.
  */
 export function createApp({
   auth,
@@ -42,12 +45,18 @@ export function createApp({
   tokenService,
   corsOrigin = ['http://localhost:5173'],
   trustProxy = false,
+  appUrl = 'http://localhost:5173',
+  pastaDoFront = null,
   logger = console,
 }) {
   const app = express();
   // Atrás de um proxy (nginx, túnel), o IP de quem acessa vem do X-Forwarded-For: é ele que entra no limite de login.
   app.set('trust proxy', trustProxy);
-  app.use(helmet());
+  // Cabeçalhos de segurança (CSP, HSTS...). "upgrade-insecure-requests" só com o site em HTTPS: num endereço http
+  // (ex.: a escola testando na rede local), ele mandaria o navegador buscar os arquivos em https e a página quebraria.
+  const emHttps = appUrl.startsWith('https://');
+  app.use(helmet({ contentSecurityPolicy: { directives: { upgradeInsecureRequests: emHttps ? [] : null } } }));
+  app.use(compression()); // JSON e arquivos do front comprimidos: menos dados no celular
   // O nome do arquivo dos PDFs (recibo, relatório) vem no Content-Disposition: o front em outra origem precisa lê-lo.
   app.use(cors({ origin: corsOrigin, exposedHeaders: ['Content-Disposition'] }));
   app.use(express.json({ limit: '100kb' }));
@@ -88,6 +97,7 @@ export function createApp({
   app.use('/api/indicadores', indicadorRoutes({ controller: createIndicadorController(daEscola('indicadores')), ...protegidas }));
   app.use('/api/relatorios', relatorioRoutes({ controller: createRelatorioController(daEscola('relatorios')), ...protegidas }));
 
+  if (pastaDoFront) app.use(servirFront(pastaDoFront));
   app.use(notFound);
   app.use(createErrorHandler({ logger }));
   return app;

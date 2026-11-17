@@ -4,9 +4,16 @@ import { createMemoryRepositories } from '../../src/infra/memory/memoryRepositor
 import { seedMemoria } from '../../src/infra/memory/seed.js';
 import { createAlunoService } from '../../src/modules/alunos/aluno.service.js';
 import { createAuthService } from '../../src/modules/auth/auth.service.js';
-import { createEscolaService } from '../../src/modules/escolas/escola.service.js';
+import { createEscolaService, LIMITES_DO_CADASTRO } from '../../src/modules/escolas/escola.service.js';
 import { createPlanoService } from '../../src/modules/planos/plano.service.js';
-import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from '../../src/shared/errors.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  TooManyRequestsError,
+  UnauthorizedError,
+  ValidationError,
+} from '../../src/shared/errors.js';
 import { hasherFake, reposDaEscolaDemo, tokenServiceFake } from '../helpers/fakes.js';
 
 const HOJE = '2026-10-07'; // quarta-feira
@@ -191,6 +198,7 @@ describe('AlunoService (RF02 e RN08)', () => {
       usuarios: repos.usuarios,
       aulas: repos.aulas,
       feriados: repos.feriados,
+      mensalidades: repos.mensalidades,
       hoje: () => hoje,
       agora: () => agora,
     });
@@ -324,15 +332,37 @@ describe('AlunoService (RF02 e RN08)', () => {
     assert.equal((await repos.aulas.list({ alunoId: 2 })).length, 8); // as do Pedro continuam
     await assert.rejects(criar().excluir(1), NotFoundError);
   });
+
+  it('aluno com mensalidade paga não pode ser excluído (recibos emitidos): fica inativo; em aberto ou cancelada não impede', async () => {
+    const mensalidade = (mes, dados) =>
+      repos.mensalidades.create({ alunoId: 1, mesReferencia: mes, valor: 140, vencimento: `${mes}-10`, status: 'pendente', ...dados });
+    await mensalidade('2026-09', { status: 'paga', dataPagamento: '2026-09-08', formaPagamento: 'pix', numeroRecibo: 1 });
+    await mensalidade('2026-10', { status: 'cancelada', cancelamentoMotivo: 'Aluno inativado.' });
+    await criar().inativar(1);
+    await assert.rejects(criar().excluir(1), {
+      name: ConflictError.name,
+      message:
+        'Este aluno tem mensalidades pagas, com recibos já emitidos: o cadastro fica inativo para manter o histórico ' +
+        'financeiro. Só um cadastro sem pagamentos pode ser excluído.',
+    });
+    assert.ok(await repos.alunos.findById(1));
+    assert.equal((await repos.mensalidades.list({ alunoId: 1 })).length, 2); // nada foi apagado
+
+    await repos.mensalidades.create({ alunoId: 2, mesReferencia: '2026-10', valor: 140, vencimento: '2026-10-10', status: 'pendente' });
+    await criar().inativar(2);
+    await criar().excluir(2); // só em aberto: exclui, com a cobrança
+    assert.equal(await repos.alunos.findById(2), null);
+    assert.deepEqual(await repos.mensalidades.list({ alunoId: 2 }), []);
+  });
 });
 
 describe('EscolaService — cadastro de escolas (multi-tenant)', () => {
   const novaEscola = { nomeEscola: 'Escola Sol', codigo: 'Sol', nome: 'Rita', email: 'rita@sol.com', login: 'admin', senha: 'segredo' };
-  const criar = (cadastroAberto = true) => {
+  const criar = (cadastroAberto = true, opcoes = {}) => {
     const auth = createAuthService({
       escolas: base.escolas, paraEscola: base.paraEscola, passwordHasher: hasherFake, tokenService: tokenServiceFake,
     });
-    return createEscolaService({ escolas: base.escolas, paraEscola: base.paraEscola, passwordHasher: hasherFake, auth, cadastroAberto });
+    return createEscolaService({ escolas: base.escolas, passwordHasher: hasherFake, auth, cadastroAberto, ...opcoes });
   };
 
   it('informa se o cadastro está aberto', () => {
@@ -382,5 +412,72 @@ describe('EscolaService — cadastro de escolas (multi-tenant)', () => {
       message: 'O cadastro de novas escolas está desativado.',
     });
     assert.equal(await base.escolas.findByCodigo('sol'), null);
+  });
+
+  it('grava a escola e a coordenação numa operação só do repositório', async () => {
+    const chamadas = [];
+    const escolas = {
+      ...base.escolas,
+      criarComCoordenacao: async (dados) => {
+        chamadas.push(dados);
+        return base.escolas.criarComCoordenacao(dados);
+      },
+    };
+    await criar(true, { escolas }).cadastrar(novaEscola);
+    assert.deepEqual(chamadas, [
+      {
+        escola: { nome: 'Escola Sol', codigo: 'sol' },
+        coordenacao: { nome: 'Rita', email: 'rita@sol.com', login: 'admin', senhaHash: 'hash:segredo', papel: 'coordenacao' },
+      },
+    ]);
+  });
+
+  it('consulta o código enquanto se digita: formato, em uso (sem diferenciar maiúsculas) e livre', async () => {
+    const servico = criar();
+    const formato = 'Use de 3 a 40 letras minúsculas, números ou hífen (ex.: escola-sol).';
+    assert.deepEqual(await servico.disponibilidade({ codigo: 'x' }), { codigo: 'x', disponivel: false, mensagem: formato });
+    assert.deepEqual(await servico.disponibilidade(), { codigo: '', disponivel: false, mensagem: formato });
+    assert.deepEqual(await servico.disponibilidade({ codigo: ' EMMOO ' }), {
+      codigo: 'emmoo',
+      disponivel: false,
+      mensagem: 'Este código de escola já está em uso.',
+    });
+    assert.deepEqual(await servico.disponibilidade({ codigo: 'sol' }), { codigo: 'sol', disponivel: true });
+  });
+
+  it('com o cadastro fechado, a consulta também é recusada (não revela quais escolas existem)', async () => {
+    await assert.rejects(criar(false).disponibilidade({ codigo: 'emmoo' }), {
+      name: ForbiddenError.name,
+      message: 'O cadastro de novas escolas está desativado.',
+    });
+  });
+
+  it('limita os cadastros por endereço (IP); dados inválidos não gastam tentativa', async () => {
+    let instante = Date.parse('2026-10-07T12:00:00Z');
+    const servico = criar(true, { agora: () => instante });
+    const { maximo, janelaMs } = LIMITES_DO_CADASTRO.cadastroPorIp;
+    await assert.rejects(servico.cadastrar({ ...novaEscola, senha: '1' }, { ip: '1.1.1.1' }), ValidationError);
+    for (let i = 0; i < maximo; i += 1) {
+      await servico.cadastrar({ ...novaEscola, codigo: `escola-${i}` }, { ip: '1.1.1.1' });
+    }
+    await assert.rejects(servico.cadastrar({ ...novaEscola, codigo: 'mais-uma' }, { ip: '1.1.1.1' }), {
+      name: TooManyRequestsError.name,
+      message: 'Muitas tentativas. Tente novamente em 60 minutos.',
+    });
+    assert.equal(await base.escolas.findByCodigo('mais-uma'), null);
+    await servico.cadastrar({ ...novaEscola, codigo: 'outro-endereco' }, { ip: '2.2.2.2' }); // cada endereço conta o seu
+    instante += janelaMs;
+    await servico.cadastrar({ ...novaEscola, codigo: 'mais-uma' }, { ip: '1.1.1.1' }); // passada a janela, libera
+    assert.ok(await base.escolas.findByCodigo('mais-uma'));
+  });
+
+  it('limita as consultas do código por endereço; formato inválido responde sem consultar nem contar', async () => {
+    const servico = criar();
+    const { maximo } = LIMITES_DO_CADASTRO.consultaPorIp;
+    await servico.disponibilidade({ codigo: 'x' }, { ip: '1.1.1.1' });
+    for (let i = 0; i < maximo; i += 1) await servico.disponibilidade({ codigo: 'sol' }, { ip: '1.1.1.1' });
+    await assert.rejects(servico.disponibilidade({ codigo: 'sol' }, { ip: '1.1.1.1' }), { name: TooManyRequestsError.name });
+    assert.equal((await servico.disponibilidade({ codigo: 'x' }, { ip: '1.1.1.1' })).disponivel, false);
+    assert.equal((await servico.disponibilidade({ codigo: 'sol' }, { ip: '2.2.2.2' })).disponivel, true);
   });
 });

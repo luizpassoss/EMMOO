@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { DEV_JWT_SECRET, loadEnv } from '../../src/config/env.js';
 
+const FORTE = 'segredo-de-teste-com-mais-de-32-caracteres';
+const PRODUCAO = { NODE_ENV: 'production', JWT_SECRET: FORTE, APP_URL: 'https://emmoo.escola.com.br' };
+
 describe('loadEnv', () => {
   it('aplica padrões de desenvolvimento', () => {
     assert.deepEqual(loadEnv({}), {
@@ -18,6 +21,10 @@ describe('loadEnv', () => {
       corsOrigin: ['http://localhost:5173'],
       appUrl: 'http://localhost:5173',
       trustProxy: false,
+      pastaDoFront: null,
+      avisos: [
+        `JWT_SECRET é o de exemplo, que é público: não exponha esta API na internet. Para gerar um próprio: node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`,
+      ],
     });
   });
   it('lê valores informados e separa múltiplas origens de CORS', () => {
@@ -44,13 +51,25 @@ describe('loadEnv', () => {
     assert.throws(() => loadEnv({ PORT: 'abc' }), /PORT inválida/);
     assert.throws(() => loadEnv({ PORT: '70000' }), /PORT inválida/);
   });
-  it('impede o segredo de desenvolvimento em produção', () => {
-    assert.throws(() => loadEnv({ NODE_ENV: 'production' }), /JWT_SECRET/);
-    assert.equal(loadEnv({ NODE_ENV: 'production', JWT_SECRET: 'forte' }).jwtSecret, 'forte');
+  it('em produção, exige um segredo próprio e longo: recusa os de exemplo (públicos) e os curtos', () => {
+    assert.throws(() => loadEnv({ NODE_ENV: 'production' }), /JWT_SECRET próprio em produção, com pelo menos 32/);
+    assert.throws(() => loadEnv({ NODE_ENV: 'production', JWT_SECRET: '' }), /JWT_SECRET/);
+    assert.throws(() => loadEnv({ NODE_ENV: 'production', JWT_SECRET: 'troque-este-segredo-em-producao' }), /JWT_SECRET/);
+    assert.throws(() => loadEnv({ NODE_ENV: 'production', JWT_SECRET: 'curto-demais' }), /JWT_SECRET/);
+    assert.throws(() => loadEnv({ ...PRODUCAO, APP_URL: '' }), /Defina APP_URL em produção/);
+    assert.equal(loadEnv({ ...PRODUCAO, FRONT_DIR: '/app/public' }).pastaDoFront, '/app/public');
+    const env = loadEnv({ ...PRODUCAO });
+    assert.deepEqual([env.jwtSecret, env.avisos], [FORTE, []]);
+  });
+  it('em desenvolvimento, o segredo de exemplo funciona, mas vem com aviso; nos testes, sem aviso', () => {
+    assert.match(loadEnv({ JWT_SECRET: DEV_JWT_SECRET }).avisos[0], /não exponha esta API na internet/);
+    assert.equal(loadEnv({ JWT_SECRET: '' }).jwtSecret, DEV_JWT_SECRET); // vazio no .env: o de exemplo, com aviso
+    assert.deepEqual(loadEnv({ JWT_SECRET: FORTE }).avisos, []);
+    assert.deepEqual(loadEnv({ NODE_ENV: 'test' }).avisos, []);
   });
   it('cadastro de escolas: aberto em desenvolvimento, fechado em produção, configurável', () => {
-    assert.equal(loadEnv({ NODE_ENV: 'production', JWT_SECRET: 'forte' }).cadastroEscolas, false);
-    assert.equal(loadEnv({ NODE_ENV: 'production', JWT_SECRET: 'forte', CADASTRO_ESCOLAS: 'Aberto' }).cadastroEscolas, true);
+    assert.equal(loadEnv({ ...PRODUCAO }).cadastroEscolas, false);
+    assert.equal(loadEnv({ ...PRODUCAO, CADASTRO_ESCOLAS: 'Aberto' }).cadastroEscolas, true);
     assert.equal(loadEnv({ CADASTRO_ESCOLAS: 'fechado' }).cadastroEscolas, false);
     assert.throws(() => loadEnv({ CADASTRO_ESCOLAS: 'sim' }), /CADASTRO_ESCOLAS inválido/);
   });

@@ -20,11 +20,14 @@ try {
     tokenService,
     corsOrigin: env.corsOrigin,
     trustProxy: env.trustProxy,
+    appUrl: env.appUrl,
+    pastaDoFront: env.pastaDoFront,
   });
 
   app
     .listen(env.port, () => {
       console.log(`API EMMOO ouvindo em http://localhost:${env.port} (persistência: ${env.dbDriver})`);
+      for (const aviso of env.avisos) console.warn(`⚠ ${aviso}`);
       // RF10/RF12 — mensalidades do mês e alertas de pagamento, ao iniciar e a cada hora.
       if (env.rotinas) iniciarRotinas({ escolas: repositories.escolas, servicosDaEscola });
     })

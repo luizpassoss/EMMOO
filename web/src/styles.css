@@ -369,6 +369,36 @@ a.botao { text-decoration: none; } /* link com cara de botão (ex.: "Editar cada
 .erro-campo { color: var(--erro); font-size: 0.82rem; font-weight: 550; line-height: 1.4; }
 /* Dica do campo: o que preencher ou o efeito da escolha, em tom mais leve que o rótulo. */
 .dica-campo { color: var(--apagado); font-size: 0.8rem; font-weight: 450; line-height: 1.4; }
+.dica-ok { display: inline-flex; align-items: center; gap: 5px; color: var(--suave); }
+/*
+ * Ajuda discreta: um "?" claro ao lado do rótulo (ou do título da seção). A explicação abre num balão escuro
+ * sobre o campo, na largura do bloco do rótulo — nunca passa da borda, nem no celular.
+ */
+.campo-rotulo, .titulo-com-ajuda { position: relative; display: flex; align-items: center; gap: 2px; min-width: 0; }
+/* O espaço acima do título fica no bloco: com a margem no título, o ícone subia em relação ao texto. */
+.login-card .titulo-com-ajuda { margin-top: 6px; }
+.login-card .titulo-com-ajuda > h2, .titulo-com-ajuda > h2 { margin: 0; }
+.ajuda { display: inline-flex; }
+.ajuda-botao {
+  position: relative; display: inline-grid; place-items: center; width: 24px; height: 24px; margin: -4px 0;
+  padding: 0; border: 0; border-radius: 50%; background: none; color: var(--apagado); cursor: pointer;
+  transition: color 0.15s;
+}
+.ajuda-botao::after { content: ''; position: absolute; inset: -6px; } /* área de toque maior que o desenho */
+.ajuda-botao:hover, .ajuda-botao[aria-expanded='true'] { color: var(--tinta); }
+.ajuda-botao:focus-visible { outline: none; box-shadow: var(--anel); }
+.ajuda-balao {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: max-content; max-width: min(100%, 320px);
+  padding: 9px 12px; border-radius: var(--raio-p); background: var(--escuro); color: #fff; box-shadow: var(--sombra-alta);
+  font-size: 0.8rem; font-weight: 450; line-height: 1.45; letter-spacing: normal; text-transform: none; text-align: left;
+  animation: ajuda-entra 0.12s ease-out;
+}
+@keyframes ajuda-entra { from { opacity: 0; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .ajuda-balao { animation: none; } }
+/* Campo só de leitura com o botão de copiar ao lado (link de acesso da equipe). */
+.campo-copiar { display: flex; gap: 8px; min-width: 0; }
+.campo .campo-copiar input { flex: 1; min-width: 0; background: var(--superficie-2); color: var(--texto); font-size: 0.92rem; text-overflow: ellipsis; }
+.campo-copiar .botao { flex: none; height: 46px; }
 .campo-inline { flex-direction: row; align-items: center; gap: 10px; }
 .campo .campo-inline select, .campo-inline select { min-width: 160px; height: 40px; } /* mesma altura dos botões da barra */
 /* Campo com ícone à esquerda (login). */
@@ -985,6 +1015,17 @@ a.botao { text-decoration: none; } /* link com cara de botão (ex.: "Editar cada
 .login-card .dica { margin-top: -8px; }
 .login-card .login-aviso { margin: 0; text-align: center; }
 .login-card .vazio { padding: 8px 0; }
+/* Aviso de privacidade: um link pequeno no pé do login e do cadastro; a página é um texto corrido, mais largo. */
+.login-legal { margin: -12px 0 0; font-size: 0.8rem; text-align: center; }
+.login-legal a { color: var(--apagado); text-underline-offset: 3px; }
+.login-legal a:hover { color: var(--tinta); }
+.login-card.documento { max-width: 680px; gap: 12px; color: var(--texto); font-size: 0.95rem; line-height: 1.65; }
+.documento .login-marca h1 { font-size: 1.35rem; letter-spacing: -0.01em; margin-right: 0; }
+.documento h2 { margin-top: 10px; font-size: 1rem; }
+.documento ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+/* Link de outra escola com uma sessão já aberta: a pergunta e as duas saídas, uma embaixo da outra. */
+.login-outra-escola { color: var(--texto); font-size: 0.95rem; line-height: 1.55; text-align: center; overflow-wrap: anywhere; }
+.login-card > .botao-secundario { width: 100%; height: 48px; margin-top: -6px; }
 
 /* ---------- Ações destrutivas, opções e dicas ---------- */
 .botao-perigo { color: var(--erro); }
@@ -1228,4 +1269,5 @@ a.avatar-link:focus-visible { outline: none; box-shadow: var(--anel); }
   }
   .botao:has(> .rotulo-opcional) { width: 40px; padding: 0; }
   .dia-agendar:has(> .rotulo-opcional) { width: 34px; height: 34px; padding: 0; justify-content: center; }
+  .campo-copiar .botao:has(> .rotulo-opcional) { width: 46px; } /* quadrado, na altura do campo */
 }

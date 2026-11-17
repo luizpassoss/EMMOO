@@ -17,6 +17,25 @@ describe('repositórios em memória — escolas', () => {
       message: 'Este código de escola já está em uso.',
     });
   });
+
+  it('cria a escola junto com quem a coordena; código em uso não cria nenhum dos dois', async () => {
+    const { escolas, paraEscola } = createMemoryRepositories();
+    const coordenacao = { nome: 'Rita', email: ' RITA@Sol.com ', login: 'Admin', senhaHash: 'h', papel: 'coordenacao' };
+    const criados = await escolas.criarComCoordenacao({ escola: { nome: 'Escola Sol', codigo: ' Sol ' }, coordenacao });
+    assert.equal(criados.escola.codigo, 'sol');
+    assert.deepEqual(
+      [criados.coordenacao.escolaId, criados.coordenacao.email, criados.coordenacao.login, criados.coordenacao.ativo],
+      [criados.escola.id, 'rita@sol.com', 'admin', true],
+    );
+    assert.equal((await paraEscola(criados.escola.id).usuarios.findByLogin('admin')).id, criados.coordenacao.id);
+
+    await assert.rejects(escolas.criarComCoordenacao({ escola: { nome: 'Outra', codigo: 'SOL' }, coordenacao }), {
+      name: ConflictError.name,
+      message: 'Este código de escola já está em uso.',
+    });
+    assert.equal((await escolas.list()).length, 1);
+    assert.equal((await paraEscola(criados.escola.id).usuarios.list()).length, 1);
+  });
 });
 
 describe('repositórios em memória — dentro de uma escola', () => {
@@ -328,6 +347,17 @@ describe('repositórios em memória — falta, reposição, diário e mensalidad
     assert.equal((await sol.mensalidades.findById(outubro.id)).formaPagamento, 'pix');
     assert.equal(await lua.mensalidades.findById(outubro.id), null);
     assert.equal(await lua.mensalidades.update(outubro.id, { status: 'pendente' }), null);
+  });
+
+  it('mensalidades: a baixa só grava o que ainda está em aberto (e só na própria escola)', async () => {
+    const outubro = await sol.mensalidades.create({ alunoId: ana.id, mesReferencia: '2026-10', valor: 140, vencimento: '2026-10-10' });
+    assert.equal(await lua.mensalidades.pagar(outubro.id, { dataPagamento: '2026-10-05', formaPagamento: 'pix' }), null);
+    const paga = await sol.mensalidades.pagar(outubro.id, { dataPagamento: '2026-10-05', formaPagamento: 'pix' });
+    assert.deepEqual([paga.status, paga.dataPagamento, paga.formaPagamento], ['paga', '2026-10-05', 'pix']);
+    assert.equal(await sol.mensalidades.pagar(outubro.id, { dataPagamento: '2026-10-06', formaPagamento: 'dinheiro' }), null);
+    assert.equal((await sol.mensalidades.findById(outubro.id)).formaPagamento, 'pix'); // a segunda não sobrescreve
+    const cancelada = await sol.mensalidades.create({ alunoId: leo.id, mesReferencia: '2026-10', valor: 90, vencimento: '2026-10-10', status: 'cancelada' });
+    assert.equal(await sol.mensalidades.pagar(cancelada.id, { dataPagamento: '2026-10-05', formaPagamento: 'pix' }), null);
   });
 
   it('alertas: um de cada tipo por mensalidade, com status e tentativas', async () => {

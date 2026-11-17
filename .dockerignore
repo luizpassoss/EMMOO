@@ -1,0 +1,14 @@
+# Fora da imagem: dependências e builds locais (são refeitos dentro dela), segredos, testes e documentação.
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+.git
+.github
+docs
+api/tests
+web/src/**/*.test.jsx
+web/src/**/*.test.js

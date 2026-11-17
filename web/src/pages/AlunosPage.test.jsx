@@ -223,10 +223,11 @@ describe('AlunosPage — painel do aluno', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(api.delete).not.toHaveBeenCalled();
 
-    api.delete.mockRejectedValue(new Error('Só é possível excluir aluno inativo. Inative o aluno antes.'));
+    api.delete.mockRejectedValue(new Error('Este aluno tem mensalidades pagas, com recibos já emitidos.'));
     fireEvent.click(screen.getByRole('button', { name: 'Excluir permanentemente' }));
     await responderConfirmacao('Excluir');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Inative o aluno antes.');
+    // O motivo aparece na própria janela do aluno, que continua aberta.
+    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent('mensalidades pagas');
   });
 
   it('fechar com algo digitado pergunta antes de descartar', async () => {

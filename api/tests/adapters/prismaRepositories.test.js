@@ -72,6 +72,40 @@ describe('repositórios Prisma — escolas', () => {
     });
   });
 
+  it('cria a escola e a coordenação numa gravação só (escrita aninhada); código repetido vira 409', async () => {
+    let falhar = false;
+    const prisma = criarPrismaFake({
+      'escola.create': (args) => {
+        if (falhar) throw erroDeUnicidade('escola_codigo_key');
+        return { id: 2, nome: args.data.nome, codigo: args.data.codigo, usuarios: [{ id: 9, escolaId: 2, ...args.data.usuarios.create }] };
+      },
+    });
+    const { escolas } = createPrismaRepositories(prisma);
+    const coordenacao = { nome: 'Rita', email: ' RITA@Sol.com ', login: 'Admin', senhaHash: 'h', papel: 'coordenacao' };
+    const criados = await escolas.criarComCoordenacao({ escola: { nome: 'Sol', codigo: ' Sol ' }, coordenacao });
+    assert.deepEqual(prisma.chamadas, [
+      [
+        'escola.create',
+        {
+          data: {
+            nome: 'Sol',
+            codigo: 'sol',
+            usuarios: { create: { nome: 'Rita', email: 'rita@sol.com', login: 'admin', senhaHash: 'h', papel: 'coordenacao' } },
+          },
+          include: { usuarios: true },
+        },
+      ],
+    ]);
+    assert.deepEqual(criados.escola, { id: 2, nome: 'Sol', codigo: 'sol' }); // sem a lista de usuários
+    assert.deepEqual([criados.coordenacao.id, criados.coordenacao.escolaId, criados.coordenacao.login], [9, 2, 'admin']);
+
+    falhar = true;
+    await assert.rejects(escolas.criarComCoordenacao({ escola: { nome: 'Sol', codigo: 'sol' }, coordenacao }), {
+      name: ConflictError.name,
+      message: 'Este código de escola já está em uso.',
+    });
+  });
+
   it('outros erros do banco seguem adiante', async () => {
     const prisma = criarPrismaFake({
       'escola.create': () => {
@@ -583,6 +617,35 @@ describe('repositórios Prisma — Pix da escola, redefinição de senha, recibo
     const antes = prisma.chamadas.length;
     assert.equal((await mensalidades.registrarNumeroRecibo(9)).numeroRecibo, 42);
     assert.equal(prisma.chamadas.length, antes + 1);
+  });
+
+  it('baixa: um UPDATE só, condicionado a "ainda em aberto"; já paga (ou cancelada) devolve null', async () => {
+    let emAberto = true;
+    const prisma = criarPrismaFake({
+      'mensalidade.updateMany': () => ({ count: emAberto ? 1 : 0 }),
+      'mensalidade.findFirst': () => ({
+        id: 9,
+        valor: '140.00',
+        status: 'paga',
+        vencimento: dataDoBanco('2026-10-10'),
+        dataPagamento: dataDoBanco('2026-10-06'),
+        formaPagamento: 'pix',
+      }),
+    });
+    const { mensalidades } = daEscola(prisma);
+    const paga = await mensalidades.pagar(9, { dataPagamento: '2026-10-06', formaPagamento: 'pix' });
+    assert.deepEqual([paga.status, paga.dataPagamento, paga.valor], ['paga', '2026-10-06', 140]);
+    assert.deepEqual(prisma.chamadas[0], [
+      'mensalidade.updateMany',
+      {
+        where: { id: 9, status: { in: ['pendente', 'atrasada'] }, escolaId: ESCOLA },
+        data: { status: 'paga', dataPagamento: dataDoBanco('2026-10-06'), formaPagamento: 'pix' },
+      },
+    ]);
+    emAberto = false;
+    const chamadasAntes = prisma.chamadas.length;
+    assert.equal(await mensalidades.pagar(9, { dataPagamento: '2026-10-07', formaPagamento: 'dinheiro' }), null);
+    assert.equal(prisma.chamadas.length, chamadasAntes + 1); // sem reler o que não foi gravado
   });
 
   it('recibo: número disputado por duas baixas tenta o seguinte; desiste depois de 5 tentativas', async () => {

@@ -53,7 +53,6 @@ export async function createContainer(env) {
   });
   const escolaService = createEscolaService({
     escolas,
-    paraEscola,
     passwordHasher,
     auth,
     cadastroAberto: env.cadastroEscolas,

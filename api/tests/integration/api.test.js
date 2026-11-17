@@ -432,6 +432,21 @@ describe('API EMMOO — várias escolas (multi-tenant)', () => {
     assert.deepEqual([status, body], [200, { cadastroDeEscolas: true, recuperacaoDeSenha: false }]);
   });
 
+  it('confere se o código está livre antes do cadastro (sem login)', async () => {
+    const emUso = await chamar('GET', '/escolas/disponibilidade?codigo=EMMOO');
+    assert.deepEqual([emUso.status, emUso.body], [
+      200,
+      { codigo: 'emmoo', disponivel: false, mensagem: 'Este código de escola já está em uso.' },
+    ]);
+    assert.deepEqual((await chamar('GET', '/escolas/disponibilidade?codigo=escola-nova')).body, {
+      codigo: 'escola-nova',
+      disponivel: true,
+    });
+    const formato = await chamar('GET', '/escolas/disponibilidade?codigo=-x');
+    assert.deepEqual([formato.status, formato.body.disponivel], [200, false]);
+    assert.equal((await chamar('GET', '/escolas/disponibilidade')).body.disponivel, false); // sem o código
+  });
+
   it('cadastra uma escola nova e já entra como coordenação dela', async () => {
     const invalido = await chamar('POST', '/escolas', { corpo: { ...cadastro, codigo: 'S' } });
     assert.deepEqual([invalido.status, invalido.body.error.details[0].campo], [400, 'codigo']);

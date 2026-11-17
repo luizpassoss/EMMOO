@@ -18,14 +18,13 @@ async function main() {
   });
   const escolaId = escola.id;
 
-  // Usuários de demonstração: cria os que faltam e redefine o acesso (usuário e senha) dos que já existem,
-  // para as credenciais do README sempre funcionarem. Só afeta estes três e-mails, e só nesta escola.
+  // Usuários de demonstração: só cria os que faltam. Quem já existe fica como está — rodar o seed de novo nunca
+  // devolve a senha de alguém à senha pública do README (ela pode já ter sido trocada).
   for (const { senha, ...usuario } of USUARIOS_DEMO) {
-    const senhaHash = await bcrypt.hash(senha, 10);
     await prisma.usuario.upsert({
       where: { escolaId_email: { escolaId, email: usuario.email } },
-      update: { login: usuario.login, senhaHash },
-      create: { ...usuario, senhaHash, escolaId },
+      update: {},
+      create: { ...usuario, senhaHash: await bcrypt.hash(senha, 10), escolaId },
     });
   }
 

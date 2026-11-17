@@ -27,7 +27,7 @@ docs: atualiza instruções de execução
 - Camadas: `routes → controller → service → repository`. Regra de negócio fica em `service` ou `domain`, nunca no controller.
 - Dependências são injetadas (factories), o que mantém tudo testável.
 - Nada de segredos no código: use `.env` (veja `.env.example`).
-- Antes do PR: `npm run lint` e `npm run test:coverage` na `api/`, `npm run test:coverage` e `npm run build` no `web/`.
+- Antes do PR: `npm run lint` e `npm run test:coverage` na `api/`, `npm run lint`, `npm run test:coverage` e `npm run build` no `web/`.
 
 ## Revisão de código (para o squad)
 

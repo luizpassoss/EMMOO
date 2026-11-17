@@ -384,11 +384,19 @@ export function createMensalidadeService({
         erros.push({ campo: 'formaPagamento', mensagem: 'Escolha a forma de pagamento: Pix ou dinheiro.' });
       }
       assertValid(erros);
-      await mensalidades.update(mensalidade.id, {
-        status: 'paga',
+      // Grava só se ainda estiver em aberto: outro envio (clique duplo, outra pessoa) pode ter dado baixa agora.
+      const paga = await mensalidades.pagar(mensalidade.id, {
         dataPagamento: input.dataPagamento,
         formaPagamento: input.formaPagamento,
       });
+      if (!paga) {
+        const agora = await buscar(id);
+        throw new ConflictError(
+          agora.status === 'cancelada'
+            ? 'Esta mensalidade está cancelada. Reabra-a antes de registrar o pagamento.'
+            : 'Esta mensalidade já está paga.',
+        );
+      }
       return apresentarUma(await mensalidades.registrarNumeroRecibo(mensalidade.id));
     },
 
