@@ -402,7 +402,8 @@ Navegador ──HTTPS──► CloudFront ──► EC2 em São Paulo: Nginx (pr
   para o plano pago para o sistema continuar no ar.
 - **Recursos** (sa-east-1, etiqueta `Projeto=emmoo`): EC2 `emmoo-producao`, IP `emmoo-ip`, grupo `emmoo-web`,
   ECR `emmoo`, bucket `emmoo-backups-740997306124`, parâmetros `/emmoo/*`, papéis `emmoo-ec2` e
-  `emmoo-github-deploy`, distribuição CloudFront `E27WMM60LTHQNS`. Ver ADR 44.
+  `emmoo-github-deploy`, distribuição CloudFront `E27WMM60LTHQNS`. Detalhes e como recriar em
+  [deploy/aws/LEIA-ME.md](deploy/aws/LEIA-ME.md); decisões na ADR 44.
 
 ## Roadmap (marcos da RFC)
 
