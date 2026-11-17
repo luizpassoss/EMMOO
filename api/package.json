@@ -19,7 +19,8 @@
     "prisma:validate": "prisma validate",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
-    "escola:criar": "node scripts/criar-escola.js"
+    "escola:criar": "node scripts/criar-escola.js",
+    "email:testar": "node scripts/testar-email.js"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",

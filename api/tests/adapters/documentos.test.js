@@ -99,5 +99,23 @@ describe('e-mail dos alertas (RF12)', () => {
     // Porta fechada no próprio computador: a conexão é recusada na hora, sem rede externa.
     const mailer = createMailer({ smtpUrl: 'smtp://127.0.0.1:1', remetente: 'EMMOO <x@y.com>' });
     await assert.rejects(mailer.enviar({ para: 'a@b.com', assunto: 'x', texto: 'y' }));
+    await assert.rejects(mailer.verificar());
+  });
+
+  it('verificar: confere o login no servidor SMTP sem enviar nada (o mesmo transporte do envio)', async () => {
+    const chamadas = [];
+    const mailer = createMailer({
+      smtpUrl: 'smtps://u:s@smtp.exemplo.com:465',
+      remetente: 'Escola <oi@escola.com>',
+      criarTransporte: async () => ({
+        verify: async () => chamadas.push('verify'),
+        sendMail: async () => chamadas.push('sendMail'),
+      }),
+    });
+    await mailer.verificar();
+    await mailer.enviar({ para: 'a@b.com', assunto: 'x', texto: 'y' });
+    assert.deepEqual(chamadas, ['verify', 'sendMail']);
+    const semSmtp = createMailer({ smtpUrl: null, remetente: 'x' });
+    await assert.rejects(semSmtp.verificar(), /defina SMTP_URL/);
   });
 });

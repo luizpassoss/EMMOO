@@ -17,7 +17,7 @@ Navegador ──HTTPS──► CloudFront ──HTTP + X-Origem-Emmoo──► E
 | CloudFront | `E27WMM60LTHQNS` (`d1uyezscfz84pc.cloudfront.net`) | HTTPS; `/assets/*` em cache (CachingOptimized); o resto sem cache, pela política `emmoo-api-sem-cache`, que inclui o `Authorization` (sem ela, o CloudFront tira esse cabeçalho dos GET) |
 | ECR | `emmoo` | Imagens, com a versão do commit; guarda as 5 mais recentes |
 | S3 | `emmoo-backups-740997306124` | Backups (bloqueio de acesso público, apagados com 30 dias) |
-| Parameter Store | `/emmoo/JWT_SECRET`, `/emmoo/MYSQL_PASSWORD`, `/emmoo/MYSQL_ROOT_PASSWORD`, `/emmoo/ORIGEM_SEGREDO` (cifrados), `/emmoo/APP_URL` | Lidos pelo `atualizar.sh` a cada deploy |
+| Parameter Store | `/emmoo/JWT_SECRET`, `/emmoo/MYSQL_PASSWORD`, `/emmoo/MYSQL_ROOT_PASSWORD`, `/emmoo/ORIGEM_SEGREDO` (cifrados), `/emmoo/APP_URL`; opcionais: `/emmoo/SMTP_URL` (cifrado) e `/emmoo/EMAIL_REMETENTE` | Lidos pelo `atualizar.sh` a cada deploy (sem os de e-mail, os alertas ficam pendentes e o "esqueci minha senha" desligado) |
 | Papel da máquina | `emmoo-ec2` | SSM, leitura do ECR, leitura de `/emmoo/*`, gravação no bucket |
 | Papel do deploy | `emmoo-github-deploy` | Assumido pelo GitHub Actions por OIDC: envia imagem ao ECR e manda comando SSM só para máquinas com `Projeto=emmoo` |
 
@@ -48,6 +48,7 @@ Pelo console: EC2 → `emmoo-producao` → Conectar → Session Manager. Depois 
 
 - Logs: `docker compose logs -f app`
 - Nova escola: `docker compose exec app npm run escola:criar -- --nome "..." --codigo ... --responsavel "..." --email ...`
+- Testar o e-mail: `docker compose exec app npm run email:testar -- --para alguem@exemplo.com`
 - Backup agora: `emmoo-backup` · próximos: `systemctl list-timers emmoo-backup.timer`
 - Restaurar: ver o cabeçalho de `backup.sh`
 

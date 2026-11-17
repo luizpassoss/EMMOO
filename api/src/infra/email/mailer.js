@@ -5,19 +5,21 @@
  */
 export function createMailer({ smtpUrl, remetente, criarTransporte = criarTransporteSmtp }) {
   if (!smtpUrl) {
-    return {
-      configurado: false,
-      async enviar() {
-        throw new Error('Envio de e-mail não configurado (defina SMTP_URL na API).');
-      },
+    const naoConfigurado = async () => {
+      throw new Error('Envio de e-mail não configurado (defina SMTP_URL na API).');
     };
+    return { configurado: false, enviar: naoConfigurado, verificar: naoConfigurado };
   }
   let transporte;
+  const obterTransporte = async () => (transporte ??= await criarTransporte(smtpUrl)); // nodemailer só no primeiro uso
   return {
     configurado: true,
     async enviar({ para, assunto, texto }) {
-      transporte ??= await criarTransporte(smtpUrl); // só carrega o nodemailer no primeiro envio
-      await transporte.sendMail({ from: remetente, to: para, subject: assunto, text: texto });
+      await (await obterTransporte()).sendMail({ from: remetente, to: para, subject: assunto, text: texto });
+    },
+    /** Conecta e faz login no servidor SMTP, sem enviar nada: confere endereço, porta e senha. */
+    async verificar() {
+      await (await obterTransporte()).verify();
     },
   };
 }

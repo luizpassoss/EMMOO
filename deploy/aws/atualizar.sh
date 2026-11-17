@@ -9,6 +9,10 @@ cd /opt/emmoo
 REGIAO=sa-east-1
 
 parametro() { aws ssm get-parameter --region "$REGIAO" --name "/emmoo/$1" --with-decryption --query Parameter.Value --output text; }
+# E-mail (alertas de pagamento e "esqueci minha senha"): opcional — sem o parâmetro, fica vazio e o e-mail desligado.
+opcional() {
+  aws ssm get-parameter --region "$REGIAO" --name "/emmoo/$1" --with-decryption --query Parameter.Value --output text 2>/dev/null || true
+}
 umask 077
 {
   echo "IMAGEM=$IMAGEM"
@@ -17,6 +21,9 @@ umask 077
   echo "MYSQL_ROOT_PASSWORD=$(parametro MYSQL_ROOT_PASSWORD)"
   echo "ORIGEM_SEGREDO=$(parametro ORIGEM_SEGREDO)"
   echo "APP_URL=$(parametro APP_URL)"
+  # Entre aspas simples: o Compose não interpreta "$" nem espaços (o remetente tem nome e endereço).
+  echo "SMTP_URL='$(opcional SMTP_URL)'"
+  echo "EMAIL_REMETENTE='$(opcional EMAIL_REMETENTE)'"
 } > .env.novo
 mv .env.novo .env
 

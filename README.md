@@ -221,6 +221,15 @@ No `api/.env`:
   define o remetente). Sem `SMTP_URL`, os alertas ficam registrados como pendentes e aparecem em **Mensalidades**; o que
   falhar no envio é tentado de novo na rotina seguinte (até 5 vezes) ou pelo botão **Enviar agora**.
 - `ROTINAS=desligadas` desliga a rotina (nos testes ela já fica desligada).
+- O mesmo e-mail liga o **"Esqueci minha senha"** (link de redefinição de uso único).
+- **Com uma conta do Gmail** (sem domínio próprio): ative a verificação em duas etapas da conta, crie uma *senha de
+  app* em https://myaccount.google.com/apppasswords e use
+  `SMTP_URL=smtps://conta%40gmail.com:senhadeapp@smtp.gmail.com:465` (o `@` do usuário vira `%40`; a senha de app sem
+  espaços) e `EMAIL_REMETENTE=Escola de Música EMMOO <conta@gmail.com>` (o mesmo endereço da conta). O Gmail aceita
+  cerca de 500 destinatários por dia.
+- **Conferir:** `npm run email:testar -- --para alguem@exemplo.com` (em `api/`) faz login no servidor de e-mail e manda
+  uma mensagem de teste, dizendo onde falhou se algo estiver errado. Em produção, os dois valores ficam nos parâmetros
+  `/emmoo/SMTP_URL` e `/emmoo/EMAIL_REMETENTE` da AWS (ver [deploy/aws/LEIA-ME.md](deploy/aws/LEIA-ME.md)).
 
 ### Senha e segurança do acesso
 
